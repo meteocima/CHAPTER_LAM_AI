@@ -46,19 +46,25 @@ norm_date() {
 # Caso limite: 2023-01-01 sta in CHAPTER-23-25 ma nella init-dir 2022123118.
 base_for_day() { [ "${1:0:4}" -ge 2023 ] && echo "$BASE_2023" || echo "$BASE_PRE2023"; }
 
-# Espande [start,end] in path assoluti DSS, 24 timestep per giorno, uno per riga.
+# Espande [start,end] in path assoluti DSS, 25 file per giorno, uno per riga.
 # Il run WRF si inizializza alle INIT_HOUR Z del giorno PRECEDENTE: 2019-06-17 -> 2019061618.
+# I 24 timestep del giorno (00..23) e il 25esimo: il file delle 24 h della STESSA run,
+# wrfout_d02_<giorno dopo>_00:00:00 nella stessa cartella. E' l'unico che contiene l'ora
+# 23Z->00Z del giorno, che dal #71 ogni conversione usa (le 00 del giorno dopo, nel
+# nome, vengono archiviate dalla run SUCCESSIVA: questo e' un altro file).
 # Aritmetica in epoch UTC: "date -d '<data> +1 hour'" verrebbe mal interpretata (+1 letto come TZ).
 expand_window() {
-    local cur end d base init h
+    local cur end d next base init h
     cur=$(date -u -d "$1" +%s); end=$(date -u -d "$2" +%s)
     while [ "$cur" -le "$end" ]; do
         d=$(date -u -d "@$cur" +%Y-%m-%d)
+        next=$(date -u -d "@$((cur + 86400))" +%Y-%m-%d)
         base=$(base_for_day "$d")
         init=$(date -u -d "@$((cur - 86400))" +%Y%m%d)$(printf '%02d' "$((10#$INIT_HOUR))")
         for h in $(seq -w 0 23); do
             echo "${base}/${init}/wrfout_d02_${d}_${h}:00:00"
         done
+        echo "${base}/${init}/wrfout_d02_${next}_00:00:00"
         cur=$((cur + 86400))
     done
 }

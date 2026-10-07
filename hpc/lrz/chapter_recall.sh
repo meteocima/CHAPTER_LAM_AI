@@ -49,12 +49,16 @@ find_covering_scan() {
     printf '%s' "$best"
 }
 
-# Tiene le righe la cui data TARGET (quella nel nome del wrfout, non la init-dir) e' in
-# [START,END]. Le date YYYY-MM-DD si confrontano come stringhe, niente aritmetica.
+# Tiene le righe il cui giorno TARGET e' in [START,END]. Il giorno target si legge dalla
+# init-dir (init + 1 giorno), non dal nome del wrfout: il 25esimo file di un giorno, le
+# 24 h della sua run, porta nel nome la data del giorno DOPO (#71). Confronto su init in
+# [START-1, END-1], come stringhe YYYYMMDD.
 filter_window() {
-    awk -v s="$START" -v e="$END" '
-        match($0, /wrfout_d02_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_/) {
-            d = substr($0, RSTART + 11, 10)
+    local s e
+    s=$(date -u -d "$START -1 day" +%Y%m%d); e=$(date -u -d "$END -1 day" +%Y%m%d)
+    awk -v s="$s" -v e="$e" '
+        match($0, /\/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\/wrfout_d02_/) {
+            d = substr($0, RSTART + 1, 8)
             if (d >= s && d <= e) print
         }' "$1"
 }
