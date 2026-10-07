@@ -37,6 +37,10 @@ pipeline:
   # Convert but KEEP the input wrfout (convert_step.sh skips its rm). Used to convert
   # staged files that must stay on disk. The 00Z sidecar invariant is unaffected.
   keep_wrfout: false
+  # A 00Z whose 24 h file (the previous day's run) was VERIFIED lost at the source on
+  # LRZ: convert it with its 19 accumulations missing (bitmap) instead of waiting for
+  # the file. Never by default -- a file that has not arrived yet is not lost (#71).
+  missing_00z_as_bitmap: false
 
 # Paths on Leonardo
 paths:

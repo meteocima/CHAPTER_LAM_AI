@@ -39,6 +39,7 @@ TOKEN_KINDS = {
     'SNAPSHOT_FAILED': PROBLEM,
     'DAYEND_UNAVAILABLE': PROBLEM,
     'CONVERT_BLOCKED': PROBLEM,
+    'SUBMIT_FAILED': PROBLEM,
 
     # about the chain itself, keyed DRIVER@<host> and not about any timestep
     'RESPAWN_FAILED': CHAIN,

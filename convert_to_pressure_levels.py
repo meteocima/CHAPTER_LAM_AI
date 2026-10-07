@@ -210,6 +210,11 @@ def parse_args():
              "Required for the static land fields "
              + "/".join(static_ref.STATIC_VARS))
     parser.add_argument(
+        "--missing-00z-as-bitmap", action="store_true",
+        help="At 00Z, publish the accumulations as missing (bitmap) when the 24 h file "
+             "of the previous day's run has no snapshot: ONLY for a file verified lost "
+             "at the source, never for one that has not arrived yet (#71)")
+    parser.add_argument(
         "--accum-snap-dir", default=None,
         help="Directory of accumulator snapshots (accum_hourly.py): the states each "
              "hour is differenced against. A state with no snapshot is taken from a "
@@ -303,7 +308,7 @@ def write_message(fout, values, info, level, grid, valid):
 # ============================================================================
 
 def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
-         static_ref_dir=None):
+         static_ref_dir=None, missing_00z_as_bitmap=False):
     debug_vars = debug_vars or []
 
     def want(key):
@@ -436,8 +441,14 @@ def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
     if accum_keys:
         print("\n=== ACCUMULATED FIELDS: THE HOUR ENDING AT THIS TIMESTEP ===")
         curr, prev = accum_hourly.window(valid.to_pydatetime())
-        accum_hour = accum_hourly.published(accum_hourly.increments(input_file, accum_snap_dir))
-        print(f"  {curr.valid:%Y-%m-%dT%H} minus {prev.valid:%Y-%m-%dT%H}, run {curr.run:%Y%m%d%H}")
+        inc = accum_hourly.increments(input_file, accum_snap_dir, dayend_lost=missing_00z_as_bitmap)
+        if inc is None:
+            shape = (len(ncfile.dimensions['south_north']), len(ncfile.dimensions['west_east']))
+            accum_hour = {k: np.full(shape, np.nan) for k in accum_keys}
+            print(f"  24 h file of run {curr.run:%Y%m%d%H} declared lost: the hour is MISSING")
+        else:
+            accum_hour = accum_hourly.published(inc)
+            print(f"  {curr.valid:%Y-%m-%dT%H} minus {prev.valid:%Y-%m-%dT%H}, run {curr.run:%Y%m%d%H}")
         if accum_snap_dir:
             # The next hour is differenced against this file's own state -- at 00Z
             # too, where that state is not `curr`. The driver snapshots every
@@ -950,4 +961,4 @@ def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
 if __name__ == "__main__":
     args = parse_args()
     main(args.input, args.output, args.debug_vars, args.accum_snap_dir,
-         args.static_ref_dir)
+         args.static_ref_dir, args.missing_00z_as_bitmap)

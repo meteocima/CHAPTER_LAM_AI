@@ -21,6 +21,8 @@
 #   STATIC_REF_DIR- (optional) geo_em sidecar for the static land fields
 #                   (static_ref.py); default: <GRIB_DIR>/../static_v1
 #   KEEP_WRFOUT   - (optional) "1" to keep the input wrfout after a successful convert
+#   MISSING_00Z_AS_BITMAP - (optional) non-empty: a 00Z whose 24 h file was verified
+#                   lost at the source gets its accumulations as missing (#71)
 
 set -euo pipefail
 
@@ -42,6 +44,8 @@ ACCUM_SNAP_DIR="${ACCUM_SNAP_DIR:-$(dirname "${GRIB_DIR%/}")/accum_snap}"
 # cvl/cvh/tvl/tvh/slt/cl/dl come from geo_em, read once into this sidecar
 STATIC_REF_DIR="${STATIC_REF_DIR:-$(dirname "${GRIB_DIR%/}")/static_v1}"
 TMPOUT="${OUTPUT}.tmp"
+# The GRIB path of ANY hour, as a strftime pattern (accum_hourly.release).
+GRIB_PATTERN=$(echo "${GRIB_DIR}/%Y/%m/${GRIB_TEMPLATE}" | sed "s/{year}/%Y/g; s/{date_compact}/%Y%m%d/g; s/{hour:02d}/%H/g")
 
 # Clean up partial output on failure
 trap 'rm -f "${TMPOUT}"' EXIT
@@ -85,24 +89,26 @@ uv run python convert_to_pressure_levels.py \
     --input "${INPUT}" \
     --output "${TMPOUT}" \
     --accum-snap-dir "${ACCUM_SNAP_DIR}" \
+    ${MISSING_00Z_AS_BITMAP:+--missing-00z-as-bitmap} \
     --static-ref-dir "${STATIC_REF_DIR}"
 
 # Atomic rename on success
 mv "${TMPOUT}" "${OUTPUT}"
 
 echo ""
-# The next hour is differenced against this file's state: never delete a wrfout
-# whose snapshot is missing (the converter writes it). Then drop the snapshots
-# this hour consumed -- no other hour reads them (accum_hourly.consumed).
-if ! uv run python -c "import accum_hourly, os, sys; sys.exit(not os.path.isfile(accum_hourly.snapshot_path(sys.argv[2], accum_hourly.state_of(sys.argv[1]))))" "${INPUT}" "${ACCUM_SNAP_DIR}"; then
-    echo "ERROR: no snapshot of ${INPUT} in ${ACCUM_SNAP_DIR}; keeping it"
-    exit 1
-fi
+# Snapshots nobody needs any more go now, whether or not the wrfout is kept: a
+# state is needed by its own hour and by the next one, and each goes once both
+# have their GRIB (accum_hourly.release). Then: never delete a wrfout whose state
+# is unsaved while the next hour still has to be differenced against it.
+uv run python accum_hourly.py release "${TARGET_DATE}T${HOUR}" "${ACCUM_SNAP_DIR}" "${GRIB_PATTERN}" || true
 if [ "${KEEP_WRFOUT:-0}" = "1" ]; then
     echo "Conversion successful. KEEP_WRFOUT=1: keeping ${INPUT}"
     exit 0
 fi
+if ! uv run python accum_hourly.py may-delete "${TARGET_DATE}T${HOUR}" "${ACCUM_SNAP_DIR}" "${GRIB_PATTERN}"; then
+    echo "ERROR: the state of ${INPUT} is not saved in ${ACCUM_SNAP_DIR} and the next hour needs it; keeping it"
+    exit 1
+fi
 echo "Conversion successful. Cleaning up wrfout..."
 timeout 60 rm -f "${INPUT}"
 echo "Deleted: ${INPUT}"
-uv run python accum_hourly.py consumed "${TARGET_DATE}T${HOUR}" "${ACCUM_SNAP_DIR}" || true

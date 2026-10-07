@@ -37,6 +37,11 @@ def run_for_day(day):
     return d - timedelta(days=1) + timedelta(hours=INIT_HOUR)
 
 
+def archive_state(valid):
+    """The state an archived file valid at `valid` holds: the run for its own day."""
+    return State(valid, run_for_day(valid))
+
+
 def window(valid):
     """(current, previous) states whose difference is the hour ending at `valid`."""
     day = valid if valid.hour else valid - timedelta(days=1)
@@ -174,19 +179,28 @@ def _snapshot_or_local(snap_dir, state, near):
         return load_snapshot(snap_dir, state)
 
 
-def increments(input_file, snap_dir):
+def increments(input_file, snap_dir, dayend_lost=False):
     """{native accumulator: its increment over the hour ending at the input's
     validity}, native units, float64. For 01Z..23Z the input itself is the
     current state; for 00Z it is not -- it belongs to the next run, 6 h into
     its spin-up -- and both states come from the run for the previous day.
     A state with neither a snapshot nor a local wrfout raises FileNotFoundError:
-    an hour is never guessed."""
+    an hour is never guessed.
+
+    `dayend_lost` is for a 24 h file verified lost at the source: then a 00Z
+    with no 24 h state returns None, and the hour is published missing. It does
+    not excuse a 23Z state that has simply not arrived yet."""
     own = state_of(input_file)
     curr, prev = window(own.valid)
     if own == curr:
         fields, _ = accum_ref.extract_from_wrfout(str(input_file))
     elif own.valid.hour == 0:
-        fields = _snapshot_or_local(snap_dir, curr, input_file)
+        try:
+            fields = _snapshot_or_local(snap_dir, curr, input_file)
+        except FileNotFoundError:
+            if dayend_lost:
+                return None
+            raise
     else:
         raise ValueError(f"{input_file} is from run {own.run:%Y%m%d%H}, not the run for its "
                          f"day ({curr.run:%Y%m%d%H})")
@@ -201,21 +215,56 @@ def consumed(valid):
     return [curr, prev] if valid.hour == 0 else [prev]
 
 
+def release(valid, snap_dir, grib_of):
+    """Delete the snapshots that nobody needs any more, once the hour ending at
+    `valid` has its GRIB. A state is needed by two jobs: the hour it belongs to
+    (which must not drop its wrfout before the state is saved, wrfout_may_go)
+    and the hour after it (which differences against it). Jobs finish in any
+    order, so each one deletes a state only when BOTH have their GRIB:
+      - this hour's own state, if the next hour is converted;
+      - the state before, if its own hour is converted;
+      - for 00Z, the 24 h state, which belongs to no archived hour.
+    `grib_of(datetime)` is the GRIB path of an hour. Returns the deleted paths."""
+    hour = timedelta(hours=1)
+    curr, prev = window(valid)
+    candidates = [(archive_state(valid), valid + hour), (prev, prev.valid)]
+    if valid.hour == 0:
+        candidates.append((curr, valid))
+    deleted = []
+    for state, other in candidates:
+        path = snapshot_path(snap_dir, state)
+        if os.path.isfile(path) and os.path.isfile(grib_of(valid)) and os.path.isfile(grib_of(other)):
+            os.remove(path)
+            deleted.append(path)
+    return deleted
+
+
+def wrfout_may_go(valid, snap_dir, grib_of):
+    """May the archived wrfout valid at `valid` be deleted? Only if its state is
+    saved, or the hour after it -- the only one that reads that state -- is
+    already converted."""
+    return (os.path.isfile(snapshot_path(snap_dir, archive_state(valid)))
+            or os.path.isfile(grib_of(valid + timedelta(hours=1))))
+
+
 def _cli(argv):
     if len(argv) == 3 and argv[0] == 'snapshot':
         state = write_snapshot(argv[1], argv[2])
         print(f"written: {snapshot_path(argv[2], state)}")
         return 0
-    if len(argv) == 3 and argv[0] == 'consumed':
-        # Run by convert_step.sh once the GRIB is in place, when it deletes the wrfout.
-        for state in consumed(datetime.strptime(argv[1], '%Y-%m-%dT%H')):
-            path = snapshot_path(argv[2], state)
-            if os.path.isfile(path):
-                os.remove(path)
-                print(f"deleted: {path}")
+    if len(argv) == 4 and argv[0] in ('release', 'may-delete'):
+        # Run by the convert scripts once the GRIB is in place. <grib_pattern> is
+        # the GRIB path as a strftime pattern, since the two scripts lay it out
+        # differently.
+        valid = datetime.strptime(argv[1], '%Y-%m-%dT%H')
+        grib_of = lambda v: v.strftime(argv[3])     # noqa: E731
+        if argv[0] == 'may-delete':
+            return 0 if wrfout_may_go(valid, argv[2], grib_of) else 1
+        for path in release(valid, argv[2], grib_of):
+            print(f"deleted: {path}")
         return 0
     print("usage: python accum_hourly.py snapshot <wrfout> <snap_dir>\n"
-          "       python accum_hourly.py consumed <YYYY-MM-DDTHH> <snap_dir>")
+          "       python accum_hourly.py release|may-delete <YYYY-MM-DDTHH> <snap_dir> <grib_pattern>")
     return 2
 
 

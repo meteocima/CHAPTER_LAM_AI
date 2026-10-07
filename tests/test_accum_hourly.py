@@ -140,3 +140,113 @@ def test_the_snapshots_an_hour_consumes():
     curr, prev = ah.window(datetime(2019, 2, 11, 0))
     assert ah.consumed(datetime(2019, 2, 11, 0)) == [curr, prev]       # 24 h file and 23Z
     assert ah.consumed(datetime(2019, 2, 11, 5)) == [ah.window(datetime(2019, 2, 11, 5))[1]]
+
+
+# ---------------------------------------------------------------------------
+# The driver is bash and cannot import accum_hourly, so it computes the same
+# states and snapshot paths a second time. This extracts its functions and
+# insists the two agree -- the bridge test_ledger.py builds for the tokens.
+# ---------------------------------------------------------------------------
+import pathlib  # noqa: E402
+import subprocess  # noqa: E402
+
+DRIVER = pathlib.Path(__file__).resolve().parent.parent / "hpc" / "fetch_step.sh"
+BEGIN = "# --- hourly states (extracted by tests/test_accum_hourly.py; keep the markers) ---"
+END = "# --- end hourly states ---"
+
+# 00Z and ordinary hours; a month, a year and the 2023 relay-base boundary.
+CASES = [datetime(2019, 2, 11, 0), datetime(2019, 2, 11, 1), datetime(2019, 2, 2, 5),
+         datetime(2019, 3, 1, 0), datetime(2024, 1, 1, 0), datetime(2024, 2, 29, 23),
+         datetime(2023, 1, 1, 0), datetime(2023, 1, 1, 13)]
+
+
+def bash(fn, *args):
+    text = DRIVER.read_text()
+    assert BEGIN in text and END in text, "the hourly-state markers are gone from hpc/fetch_step.sh"
+    src = text.split(BEGIN, 1)[1].split(END, 1)[0]
+    out = subprocess.run(['bash', '-c', f"set -euo pipefail\nINIT_HOUR=18\nACCUM_SNAP_DIR=/S\n{src}\n"
+                          f"{fn} {' '.join(args)}"], capture_output=True, text=True, check=True)
+    return out.stdout.split()
+
+
+def test_the_driver_names_the_snapshots_an_hour_needs_as_accum_hourly_does():
+    for v in CASES:
+        d, h = f"{v:%Y-%m-%d}", f"{v:%H}"
+        curr, prev = ah.window(v)
+        want = [prev] if v.hour else [curr, prev]
+        assert bash('window_snaps', d, h) == [ah.snapshot_path('/S', s) for s in want], v
+
+
+def test_the_driver_names_an_archived_files_own_snapshot_as_accum_hourly_does():
+    for v in CASES:
+        d, h = f"{v:%Y-%m-%d}", f"{v:%H}"
+        assert bash('own_snap', d, h) == [ah.snapshot_path('/S', ah.archive_state(v))], v
+
+
+def _touch_snapshot(snaps, state):
+    p = pathlib.Path(ah.snapshot_path(snaps, state))
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b'x')
+    return p
+
+
+def test_a_snapshot_goes_only_when_both_its_producer_and_its_consumer_are_converted(tmp_path):
+    snaps, gribs = tmp_path / 'snaps', set()
+    grib_of = lambda v: str(tmp_path / f"{v:%Y%m%d%H}.grib")     # noqa: E731
+
+    def converted(v):
+        pathlib.Path(grib_of(v)).write_bytes(b'g')
+
+    t4, t5, t6 = (datetime(2019, 2, 10, h) for h in (4, 5, 6))
+    s4, s5 = (_touch_snapshot(snaps, ah.archive_state(v)) for v in (t4, t5))
+
+    # 05Z finishes first: the state of 04Z is consumed, but 04Z itself is not
+    # converted yet and its job still has to find its own snapshot.
+    converted(t5)
+    ah.release(t5, snaps, grib_of)
+    assert s4.exists() and s5.exists()
+    assert ah.wrfout_may_go(t5, snaps, grib_of)          # its own snapshot is there
+
+    converted(t4)                                        # then 04Z: its state may go now
+    ah.release(t4, snaps, grib_of)
+    assert not s4.exists() and s5.exists()               # 05Z's state waits for 06Z
+
+    converted(t6)
+    ah.release(t6, snaps, grib_of)
+    assert not s5.exists()
+    s5_gone_but_consumed = ah.wrfout_may_go(t5, snaps, grib_of)
+    assert s5_gone_but_consumed                          # 06Z has its GRIB: nothing needs 05Z
+
+
+def test_the_24h_snapshot_goes_with_the_00z_that_consumed_it(tmp_path):
+    snaps = tmp_path / 'snaps'
+    grib_of = lambda v: str(tmp_path / f"{v:%Y%m%d%H}.grib")     # noqa: E731
+    v = datetime(2019, 2, 11, 0)
+    curr, prev = ah.window(v)
+    s24 = _touch_snapshot(snaps, curr)
+    s23 = _touch_snapshot(snaps, prev)
+    pathlib.Path(grib_of(v)).write_bytes(b'g')
+    ah.release(v, snaps, grib_of)
+    assert not s24.exists() and s23.exists()             # 23Z of the 10th not converted yet
+    assert not ah.wrfout_may_go(v, snaps, grib_of)       # 00Z's own state was never saved
+
+
+def test_a_lost_24h_file_gives_no_increments_only_when_declared_lost(tmp_path):
+    import pytest
+    snaps = tmp_path / 'snaps'
+    inp = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_00:00:00', 3.0)
+    ah.write_snapshot(_fake_wrfout(tmp_path / 'b', '2019-02-09_18:00:00',
+                                   '2019-02-10_23:00:00', 39.0), snaps)
+    with pytest.raises(FileNotFoundError):                    # by default nothing is guessed
+        ah.increments(inp, snaps)
+    assert ah.increments(inp, snaps, dayend_lost=True) is None   # the hour is missing
+
+
+def test_declaring_the_24h_file_lost_does_not_excuse_a_23z_still_in_transit(tmp_path):
+    import pytest
+    snaps = tmp_path / 'snaps'
+    inp = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_00:00:00', 3.0)
+    ah.write_snapshot(_fake_wrfout(tmp_path / 'a', '2019-02-09_18:00:00',
+                                   '2019-02-11_00:00:00', 40.0), snaps)
+    with pytest.raises(FileNotFoundError, match='2019-02-10T23'):
+        ah.increments(inp, snaps, dayend_lost=True)
