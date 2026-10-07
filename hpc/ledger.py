@@ -22,6 +22,7 @@ TOKEN_KINDS = {
     'CONVERT_SUBMITTED': CLEAR,
     'SKIP_GRIB_EXISTS': CLEAR,
     'SKIP_RAW_EXISTS': CLEAR,
+    'SNAPSHOT_OK': CLEAR,
     'REF_OK': CLEAR,
 
     # the timestep needs attention: usually a re-run, a recall on LRZ only if it
@@ -40,6 +41,9 @@ TOKEN_KINDS = {
     'DAYEND_UNAVAILABLE': PROBLEM,
     'CONVERT_BLOCKED': PROBLEM,
     'SUBMIT_FAILED': PROBLEM,
+    # local but waiting for its snapshots or for room in the queue; cleared by the
+    # CONVERT_SUBMITTED that eventually lets it go
+    'CONVERT_WAITING': PROBLEM,
 
     # about the chain itself, keyed DRIVER@<host> and not about any timestep
     'RESPAWN_FAILED': CHAIN,

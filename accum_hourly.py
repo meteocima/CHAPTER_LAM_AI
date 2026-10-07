@@ -215,6 +215,27 @@ def consumed(valid):
     return [curr, prev] if valid.hour == 0 else [prev]
 
 
+def is_hourly_grib(path, valid):
+    """Does the GRIB of the hour `valid` already carry the hour ending there? Read
+    off its first accumulation (template 8, statistical process 1). A 0-H file of
+    the archive before #71 does not, and still needs the state before it."""
+    if not os.path.isfile(path):
+        return False
+    from eccodes import codes_get, codes_grib_new_from_file, codes_release
+    ref = valid - timedelta(hours=1)
+    with open(path, 'rb') as fh:
+        while (gid := codes_grib_new_from_file(fh)) is not None:
+            try:
+                if (codes_get(gid, 'productDefinitionTemplateNumber') == 8
+                        and codes_get(gid, 'typeOfStatisticalProcessing') == 1):
+                    return (codes_get(gid, 'dataDate') == int(f"{ref:%Y%m%d}")
+                            and codes_get(gid, 'dataTime') == int(f"{ref:%H%M}")
+                            and codes_get(gid, 'endStep') - codes_get(gid, 'startStep') == 1)
+            finally:
+                codes_release(gid)
+    return False
+
+
 def release(valid, snap_dir, grib_of):
     """Delete the snapshots that nobody needs any more, once the hour ending at
     `valid` has its GRIB. A state is needed by two jobs: the hour it belongs to
@@ -224,6 +245,8 @@ def release(valid, snap_dir, grib_of):
       - this hour's own state, if the next hour is converted;
       - the state before, if its own hour is converted;
       - for 00Z, the 24 h state, which belongs to no archived hour.
+    "Has its GRIB" means an HOURLY one: a 0-H file left from before #71 still
+    needs the state before it, to be made hourly by hpc/fix_accum_hourly.py.
     `grib_of(datetime)` is the GRIB path of an hour. Returns the deleted paths."""
     hour = timedelta(hours=1)
     curr, prev = window(valid)
@@ -233,7 +256,8 @@ def release(valid, snap_dir, grib_of):
     deleted = []
     for state, other in candidates:
         path = snapshot_path(snap_dir, state)
-        if os.path.isfile(path) and os.path.isfile(grib_of(valid)) and os.path.isfile(grib_of(other)):
+        if (os.path.isfile(path) and is_hourly_grib(grib_of(valid), valid)
+                and is_hourly_grib(grib_of(other), other)):
             os.remove(path)
             deleted.append(path)
     return deleted

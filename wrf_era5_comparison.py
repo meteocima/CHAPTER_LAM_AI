@@ -18,9 +18,10 @@ Entry format
 parameter definition prescribes (this is how `mucape`/`mucin` end up on
 `mostUnstableParcel`).
 
-`stepType` is absent for instantaneous fields. Fields accumulated since 00Z of
-the same day carry `'stepType': 'accum'`; `'max1h'` marks a maximum over the
-preceding hour (see accum_ref.py and the writer in convert_to_pressure_levels).
+`stepType` is absent for instantaneous fields. Accumulated fields carry
+`'stepType': 'accum'` and cover the hour ending at the timestep (#71, see
+accum_hourly.py); `'max1h'` marks a maximum over the same hour. Both are written
+with reference H-1 and step 0-1 by convert_to_pressure_levels.
 
 Deliberately NOT produced
 -------------------------
@@ -223,7 +224,7 @@ WRF_TO_ECMWF_PARAMID = {
     'stl3':  {'shortName': 'stl3',  'paramId': 183, 'long_name': 'Soil temperature level 3 (28-100 cm)', 'units': 'K', **_SFC},
     'stl4':  {'shortName': 'stl4',  'paramId': 236, 'long_name': 'Soil temperature level 4 (100-289 cm)', 'units': 'K', **_SFC},
 
-    # ---------------- accumulated since 00Z of the same day ----------------
+    # ---------------- accumulated over the hour ending at the timestep ------
     'RAINNC':  {'shortName': 'tp',   'paramId': 228,    'long_name': 'Total precipitation', 'units': 'm', 'stepType': 'accum', **_SFC},
     'tirf':    {'shortName': 'tirf', 'paramId': 235015, 'long_name': 'Time integral of rain flux (rain only)', 'units': 'kg/m^2', 'stepType': 'accum', **_SFC},
     'SNOWNC':  {'shortName': 'sf',   'paramId': 144,    'long_name': 'Snowfall (water equivalent)', 'units': 'm', 'stepType': 'accum', **_SFC},
@@ -231,9 +232,9 @@ WRF_TO_ECMWF_PARAMID = {
     'UDROFF':  {'shortName': 'ssro', 'paramId': 9,      'long_name': 'Sub-surface runoff', 'units': 'm', 'stepType': 'accum', **_SFC},
     'ro':      {'shortName': 'ro',   'paramId': 205,    'long_name': 'Runoff (surface + sub-surface)', 'units': 'm', 'stepType': 'accum', **_SFC},
 
-    # ---------------- radiation, accumulated since 00Z --------------------------
+    # ---------------- radiation, accumulated over the hour ending at the timestep
     # Every one of these is monotone within a run (verified on March and July,
-    # five hours each), so referring them to 00Z is sound. ECMWF sign convention:
+    # five hours each), so an hourly difference is never negative. ECMWF sign convention:
     # a net flux is downward minus upward, so ttr/ttrc come out negative.
     # Downward (native, straight through the accumulated branch):
     'ACSWDNB':  {'shortName': 'ssrd',  'paramId': 169,    'long_name': 'Surface solar radiation downwards', 'units': 'J/m^2', 'stepType': 'accum', **_SFC},

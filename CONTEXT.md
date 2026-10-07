@@ -10,7 +10,7 @@ and the **orchestration**, which moves 9 GB files between two supercomputers. Th
 almost no vocabulary, and the words that do cross over are the ones that collide.
 
 This file is a glossary and nothing else. The reasoning behind the science — why `tp` is
-referred to 00Z, how the `skt` emissivity was measured, which hypotheses were refuted —
+the hour ending at its timestep and where 00Z takes it from, how the `skt` emissivity was measured, which hypotheses were refuted —
 lives in `CLAUDE.md`, and what cannot be produced at all lives in `MISSING_VARIABLES.md`.
 
 ## Language

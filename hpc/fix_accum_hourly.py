@@ -186,8 +186,7 @@ def _write_missing(path, valid, params):
     rewrite_hour(path, valid, {pid: np.full(size, np.nan) for pid in params.values()})
 
 
-def fix_day(day, archive_days, path_of, ref_dir, snap_dir, params=None,
-            missing_00z_as_bitmap=False):
+def fix_day(day, archive_days, path_of, ref_dir, snap_dir, params=None, lost_00z=()):
     """Make every accumulation of `day` hourly, and the 00Z that closes it.
 
     Order is what makes a crash harmless: the next day's 00Z first (it needs
@@ -199,9 +198,10 @@ def fix_day(day, archive_days, path_of, ref_dir, snap_dir, params=None,
     depends on it, while a missing NEXT-day 00Z stops the day before 23Z is
     touched: once 23Z is hourly, that hour could only come from a native
     snapshot of 23Z, i.e. from fetching a 9 GB file again. A snapshot may just
-    not have arrived yet, so that is the default. `missing_00z_as_bitmap` is
-    for a source declared lost: the 00Z is written all-missing (a bitmap,
-    never zero) and the rest of the day goes on.
+    not have arrived yet, so that is the default. `lost_00z` names the days
+    (dates) whose 00Z hour was verified lost on LRZ: such a 00Z is written
+    all-missing (a bitmap, never zero) and the rest of the day goes on. It is a
+    list of days and not a switch, so that a file merely late is never caught.
 
     Returns the problems that did not stop the day.
     """
@@ -220,7 +220,7 @@ def fix_day(day, archive_days, path_of, ref_dir, snap_dir, params=None,
         try:
             fix_00z(d0, path_of, ref_dir, snap_dir, params, use_archive_23z=False)
         except FileNotFoundError as exc:
-            if missing_00z_as_bitmap:
+            if d0.date() in lost_00z:
                 _write_missing(path_of(d0), d0, params)
                 problems.append(f"{d0:%Y-%m-%dT%H} written missing: {exc}")
             else:
@@ -231,7 +231,7 @@ def fix_day(day, archive_days, path_of, ref_dir, snap_dir, params=None,
             fix_00z(nxt, path_of, ref_dir, snap_dir, params,
                     use_archive_23z=not is_hourly(d0 + timedelta(hours=23)))
         except FileNotFoundError as exc:
-            if not missing_00z_as_bitmap:
+            if nxt.date() not in lost_00z:
                 raise
             _write_missing(path_of(nxt), nxt, params)
             problems.append(f"{nxt:%Y-%m-%dT%H} written missing: {exc}")
@@ -270,9 +270,10 @@ def main():
     ap.add_argument('--ledger', default=f'{WORK_DIR}/logs/fix_accum_hourly_status.log')
     ap.add_argument('--month', action='append', default=[], help='YYYY-MM (repeatable)')
     ap.add_argument('--date', action='append', default=[], help='YYYY-MM-DD (repeatable)')
-    ap.add_argument('--missing-00z-as-bitmap', action='store_true',
-                    help='write a 00Z whose snapshot is absent as all-missing instead of '
-                         'stopping: ONLY for a source declared lost, never for one in transit')
+    ap.add_argument('--missing-00z-day', action='append', default=[], metavar='YYYY-MM-DD',
+                    help='a day whose 00Z hour (23Z->00Z of the day before) was verified LOST '
+                         'on LRZ: written all-missing instead of stopping. Repeatable; never '
+                         'for a file merely in transit')
     args = ap.parse_args()
     if not args.month and not args.date:
         ap.error('give --month and/or --date')
@@ -287,6 +288,7 @@ def main():
     # A day is in the archive when its 23Z is: that is what the next 00Z needs.
     in_archive = lambda d: os.path.isfile(path_of(d + timedelta(hours=23)))   # noqa: E731
     params = registry_params()
+    lost = {datetime.strptime(d, '%Y-%m-%d').date() for d in args.missing_00z_day}
     failed = 0
     for day in sorted(days):
         if not in_archive(day):
@@ -299,7 +301,7 @@ def main():
                           if in_archive(day + timedelta(days=k))}
             try:
                 problems = fix_day(day, neighbours, path_of, args.accum_ref_dir, args.snap_dir,
-                                   params, args.missing_00z_as_bitmap)
+                                   params, lost)
                 status, detail = ('PARTIAL', ' ; '.join(problems)) if problems else ('FIXED', '')
                 failed += bool(problems)
             except Exception as exc:      # noqa: BLE001 - recorded, the next day goes on

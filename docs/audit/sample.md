@@ -1,5 +1,10 @@
 # The audit sample
 
+> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER/issues/71)
+> (2026-10-07) every accumulation was summed from 00Z of the day, with zero at 00Z; since then
+> each covers the hour ending at its timestep, 00Z included. Statements below about accumulations
+> "since 00Z" or "zero at 00Z" describe the archive this audit was run on, not the current one.
+
 The fixture every ticket of the variable audit measures. Thirty-four timesteps,
 staged as wrfout and converted to GRIB2 at the current 246-message schema, kept on
 disk for the duration of the audit.

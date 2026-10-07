@@ -1,5 +1,10 @@
 # Family 5: water-cycle accumulations and `10fg`
 
+> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER/issues/71)
+> (2026-10-07) every accumulation was summed from 00Z of the day, with zero at 00Z; since then
+> each covers the hour ending at its timestep, 00Z included. Statements below about accumulations
+> "since 00Z" or "zero at 00Z" describe the archive this audit was run on, not the current one.
+
 Seven fields: six accumulated since 00Z — `tp` `sf` `tirf` `ro` `sro` `ssro` —
 and `10fg`, the one field in the archive with a different time convention.
 

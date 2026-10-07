@@ -109,6 +109,12 @@ def test_00z_takes_the_previous_days_23z_as_reference_and_missing_stays_missing(
     assert (tp['dataDate'], tp['dataTime'], tp['stepRange']) == (20240701, 2300, '0-1')
     assert (tp['validityDate'], tp['validityTime']) == (20240702, 0)
     assert tp['values'][1] == 9999.0                               # bitmap, not zero
+    with open(path, 'rb') as fh:
+        gid = eccodes.codes_grib_new_from_file(fh)       # skt
+        eccodes.codes_release(gid)
+        gid = eccodes.codes_grib_new_from_file(fh)       # tp
+        assert eccodes.codes_get(gid, 'bitmapPresent') == 1
+        eccodes.codes_release(gid)
     np.testing.assert_allclose(tp['values'][[0, 5]], [0.0003, 0.0001], atol=1e-8)
 
 
@@ -271,7 +277,11 @@ def test_a_00z_declared_unrecoverable_is_written_missing_and_the_day_completes(t
 
     with pytest.raises(FileNotFoundError):                # by default: nothing is guessed
         fix.fix_day(DAY, archive_days=MID_ARCHIVE, **arch)
-    problems = fix.fix_day(DAY, archive_days=MID_ARCHIVE, missing_00z_as_bitmap=True, **arch)
+    # Declaring ANOTHER day lost changes nothing: the flag names days, not a mode.
+    with pytest.raises(FileNotFoundError):
+        fix.fix_day(DAY, archive_days=MID_ARCHIVE, lost_00z={DAY.date()}, **arch)
+    problems = fix.fix_day(DAY, archive_days=MID_ARCHIVE,
+                           lost_00z={(DAY + timedelta(days=1)).date()}, **arch)
 
     assert len(problems) == 1 and '2024-07-02T00' in problems[0]
     nxt = read(arch['path_of'](DAY + timedelta(days=1)))[TP]
@@ -279,3 +289,77 @@ def test_a_00z_declared_unrecoverable_is_written_missing_and_the_day_completes(t
     got = hourly_values(arch)
     for h in range(2, 24):
         assert abs(got[h][2] - 1e-3 * hourly_mm(h)) < 1e-8, h
+
+
+def test_release_keeps_a_state_whose_consumer_is_still_0h(tmp_path, fix):
+    # A new block next to an old one: the 0-H GRIB of the next hour exists, but the
+    # post-pass will still need this hour's state to make it hourly.
+    import accum_hourly as ah
+    snaps = tmp_path / 'snaps'
+    grib_of = lambda v: str(tmp_path / f"{v:%Y%m%d%H}.grib")     # noqa: E731
+    t23, t00 = datetime(2019, 2, 28, 23), datetime(2019, 3, 1, 0)
+    snap = pathlib.Path(ah.snapshot_path(snaps, ah.archive_state(t23)))
+    snap.parent.mkdir(parents=True)
+    snap.write_bytes(b'x')
+    write_old(grib_of(t23), t23, tp=[0.0] * 6)
+    fix.rewrite_hour(grib_of(t23), t23, {TP: np.zeros(6)})        # 23Z: converted, hourly
+    write_old(grib_of(t00), t00, tp=[0.0] * 6)                     # 00Z: the old 0-H file
+    ah.release(t23, snaps, grib_of)
+    assert snap.exists()
+    fix.rewrite_hour(grib_of(t00), t00, {TP: np.zeros(6)})        # once 00Z is hourly too
+    ah.release(t23, snaps, grib_of)
+    assert not snap.exists()
+
+
+# --- releasing snapshots (accum_hourly.release): needs real hourly GRIBs -----
+import accum_hourly as ah  # noqa: E402
+
+
+def _touch_snapshot(snaps, state):
+    p = pathlib.Path(ah.snapshot_path(snaps, state))
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b'x')
+    return p
+
+
+def test_a_snapshot_goes_only_when_both_its_producer_and_its_consumer_are_converted(tmp_path, fix):
+    snaps = tmp_path / 'snaps'
+    grib_of = lambda v: str(tmp_path / f"{v:%Y%m%d%H}.grib")     # noqa: E731
+
+    def converted(v):
+        write_old(grib_of(v), v, tp=[0.0] * 6)
+        fix.rewrite_hour(grib_of(v), v, {TP: np.zeros(6)})
+
+    t4, t5, t6 = (datetime(2019, 2, 10, h) for h in (4, 5, 6))
+    s4, s5 = (_touch_snapshot(snaps, ah.archive_state(v)) for v in (t4, t5))
+
+    # 05Z finishes first: the state of 04Z is consumed, but 04Z itself is not
+    # converted yet and its job still has to find its own snapshot.
+    converted(t5)
+    ah.release(t5, snaps, grib_of)
+    assert s4.exists() and s5.exists()
+    assert ah.wrfout_may_go(t5, snaps, grib_of)          # its own snapshot is there
+
+    converted(t4)                                        # then 04Z: its state may go now
+    ah.release(t4, snaps, grib_of)
+    assert not s4.exists() and s5.exists()               # 05Z's state waits for 06Z
+
+    converted(t6)
+    ah.release(t6, snaps, grib_of)
+    assert not s5.exists()
+    s5_gone_but_consumed = ah.wrfout_may_go(t5, snaps, grib_of)
+    assert s5_gone_but_consumed                          # 06Z has its GRIB: nothing needs 05Z
+
+
+def test_the_24h_snapshot_goes_with_the_00z_that_consumed_it(tmp_path, fix):
+    snaps = tmp_path / 'snaps'
+    grib_of = lambda v: str(tmp_path / f"{v:%Y%m%d%H}.grib")     # noqa: E731
+    v = datetime(2019, 2, 11, 0)
+    curr, prev = ah.window(v)
+    s24 = _touch_snapshot(snaps, curr)
+    s23 = _touch_snapshot(snaps, prev)
+    write_old(grib_of(v), v, tp=[0.0] * 6)
+    fix.rewrite_hour(grib_of(v), v, {TP: np.zeros(6)})
+    ah.release(v, snaps, grib_of)
+    assert not s24.exists() and s23.exists()             # 23Z of the 10th not converted yet
+    assert not ah.wrfout_may_go(v, snaps, grib_of)       # 00Z's own state was never saved

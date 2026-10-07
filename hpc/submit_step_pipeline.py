@@ -271,7 +271,7 @@ def app(cfg: DictConfig):
         "MIN_WRFOUT_BYTES": str(MIN_WRFOUT_BYTES),
         "DOWNLOAD_ONLY": "1" if download_only else "0",
         "KEEP_WRFOUT": "1" if cfg.pipeline.get("keep_wrfout", False) else "0",
-        "MISSING_00Z_AS_BITMAP": "1" if cfg.pipeline.get("missing_00z_as_bitmap", False) else "",
+        "MISSING_00Z_DAYS": " ".join(str(d) for d in cfg.pipeline.get("missing_00z_days", []) or []),
         "MAX_QUEUED_CONVERTS": str(int(cfg.batch.get("max_queued_converts", 0))),
         "DRY_RUN": "1" if dry_run else "0",
     }

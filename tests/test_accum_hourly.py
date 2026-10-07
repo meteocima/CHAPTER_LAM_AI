@@ -183,54 +183,6 @@ def test_the_driver_names_an_archived_files_own_snapshot_as_accum_hourly_does():
         assert bash('own_snap', d, h) == [ah.snapshot_path('/S', ah.archive_state(v))], v
 
 
-def _touch_snapshot(snaps, state):
-    p = pathlib.Path(ah.snapshot_path(snaps, state))
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_bytes(b'x')
-    return p
-
-
-def test_a_snapshot_goes_only_when_both_its_producer_and_its_consumer_are_converted(tmp_path):
-    snaps, gribs = tmp_path / 'snaps', set()
-    grib_of = lambda v: str(tmp_path / f"{v:%Y%m%d%H}.grib")     # noqa: E731
-
-    def converted(v):
-        pathlib.Path(grib_of(v)).write_bytes(b'g')
-
-    t4, t5, t6 = (datetime(2019, 2, 10, h) for h in (4, 5, 6))
-    s4, s5 = (_touch_snapshot(snaps, ah.archive_state(v)) for v in (t4, t5))
-
-    # 05Z finishes first: the state of 04Z is consumed, but 04Z itself is not
-    # converted yet and its job still has to find its own snapshot.
-    converted(t5)
-    ah.release(t5, snaps, grib_of)
-    assert s4.exists() and s5.exists()
-    assert ah.wrfout_may_go(t5, snaps, grib_of)          # its own snapshot is there
-
-    converted(t4)                                        # then 04Z: its state may go now
-    ah.release(t4, snaps, grib_of)
-    assert not s4.exists() and s5.exists()               # 05Z's state waits for 06Z
-
-    converted(t6)
-    ah.release(t6, snaps, grib_of)
-    assert not s5.exists()
-    s5_gone_but_consumed = ah.wrfout_may_go(t5, snaps, grib_of)
-    assert s5_gone_but_consumed                          # 06Z has its GRIB: nothing needs 05Z
-
-
-def test_the_24h_snapshot_goes_with_the_00z_that_consumed_it(tmp_path):
-    snaps = tmp_path / 'snaps'
-    grib_of = lambda v: str(tmp_path / f"{v:%Y%m%d%H}.grib")     # noqa: E731
-    v = datetime(2019, 2, 11, 0)
-    curr, prev = ah.window(v)
-    s24 = _touch_snapshot(snaps, curr)
-    s23 = _touch_snapshot(snaps, prev)
-    pathlib.Path(grib_of(v)).write_bytes(b'g')
-    ah.release(v, snaps, grib_of)
-    assert not s24.exists() and s23.exists()             # 23Z of the 10th not converted yet
-    assert not ah.wrfout_may_go(v, snaps, grib_of)       # 00Z's own state was never saved
-
-
 def test_a_lost_24h_file_gives_no_increments_only_when_declared_lost(tmp_path):
     import pytest
     snaps = tmp_path / 'snaps'

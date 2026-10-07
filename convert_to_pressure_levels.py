@@ -24,7 +24,9 @@ once, in accum_hourly.published, which the archive's post-pass shares.
 
 import argparse
 import os
+import shutil
 import sys
+import tempfile
 
 import numpy as np
 from netCDF4 import Dataset
@@ -441,7 +443,12 @@ def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
     if accum_keys:
         print("\n=== ACCUMULATED FIELDS: THE HOUR ENDING AT THIS TIMESTEP ===")
         curr, prev = accum_hourly.window(valid.to_pydatetime())
-        inc = accum_hourly.increments(input_file, accum_snap_dir, dayend_lost=missing_00z_as_bitmap)
+        # By hand with no --accum-snap-dir: states found beside the input are
+        # snapshotted into a throw-away directory, and nothing is kept.
+        snap_dir = accum_snap_dir or tempfile.mkdtemp(prefix='accum_snap_')
+        inc = accum_hourly.increments(input_file, snap_dir, dayend_lost=missing_00z_as_bitmap)
+        if not accum_snap_dir:
+            shutil.rmtree(snap_dir, ignore_errors=True)
         if inc is None:
             shape = (len(ncfile.dimensions['south_north']), len(ncfile.dimensions['west_east']))
             accum_hour = {k: np.full(shape, np.nan) for k in accum_keys}

@@ -15,7 +15,7 @@ dates:
   frequency: 1h
 
 # One GRIB per timestep. The grib source selects on valid_datetime, so the accumulated
-# variables (reference 00Z, GRIB step 0-H) and 10fg (reference H-1) land on their timestep.
+# variables and 10fg (reference H-1, GRIB step 0-1, #71) land on their timestep.
 # The forcings are not in the archive: anemoi computes them at build time on the grid of
 # the GRIB it is joined to.
 # The flavour is anemoi's documented fix for single-level names: every non-pressure level

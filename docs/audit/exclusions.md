@@ -112,7 +112,7 @@ the file should say what it is:
 | | what it is | why not |
 |---|---|---|
 | `LWDNB`, `LWDNBC`, `ACSWDNTC` | instantaneous or clear-sky forms of surface and TOA fluxes | we publish the accumulated forms `strd`, `strdc`, `tisr` |
-| `PREC_ACC_NC`, `SNOW_ACC_NC` | precipitation and snowfall over the output interval | we publish `tp` and `sf` since 00Z; these are the same quantity on a different interval, and `PREC_ACC_NC` is a free cross-check on `tp` |
+| `PREC_ACC_NC`, `SNOW_ACC_NC` | precipitation and snowfall over the output interval | we publish `tp` and `sf` over the hour ending at the timestep, which with `prec_acc_dt = 60` is exactly this interval (#71): `PREC_ACC_NC` is a free cross-check on `tp` |
 | `LAKEMASK` | the runtime lake mask | we publish `cl` from `geo_em`, which is the fractional cover and carries more |
 | `COSZEN` | cosine of the solar zenith angle | pure geometry from time and position, no model content; ECMWF defines `260225 solza` and ERA5 does not publish it |
 | `LAI` | the model's leaf area index | **belongs with the `lai_lv`/`lai_hv` refusal and is not listed there.** `rdlai2d = .false.`, so this is a table lookup on the dominant category, not observed |

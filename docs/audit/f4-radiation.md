@@ -1,5 +1,10 @@
 # Family 4: radiation
 
+> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER/issues/71)
+> (2026-10-07) every accumulation was summed from 00Z of the day, with zero at 00Z; since then
+> each covers the hour ending at its timestep, 00Z included. Statements below about accumulations
+> "since 00Z" or "zero at 00Z" describe the archive this audit was run on, not the current one.
+
 Thirteen fields, **all accumulated since 00Z**: `ssr` `ssrc` `ssrd` `ssrdc`
 `str` `strc` `strd` `strdc` `tisr` `tsr` `tsrc` `ttr` `ttrc`.
 

@@ -165,6 +165,8 @@ LEG_B_IDENTITY = {
     'ro':   (('SFROFF', 'UDROFF'), ()),
     # rainfall is precipitation less its frozen parts
     'tirf': (('RAINNC',), ('SNOWNC', 'GRAUPELNC')),
+    # snowfall is ALL the solid precipitation, graupel included (#52)
+    'sf':   (('SNOWNC', 'GRAUPELNC'), ()),
 }
 
 # --- Leg D: identities inside the published archive --------------------------
@@ -801,6 +803,9 @@ def leg_b(token, message, timestep):
             hour_inc = accum_hourly.increments(wrfout_path(timestep), ACCUM_SNAP_DIR)
         except FileNotFoundError as exc:
             result['note'] = f'the states bounding this hour are not staged ({exc})'
+            return result
+        except ValueError as exc:            # a wrfout of another run under this name
+            result['note'] = f'not comparable: {exc}'
             return result
 
     if kind == 'direct' and token in STATIC_FIELDS:
