@@ -10,10 +10,9 @@ import pathlib
 import sys
 from datetime import datetime, timedelta
 
-import numpy as np
+import eccodes  # not importorskip: conftest loads the library, and a GRIB test that
+import numpy as np  # skips in silence is a test nobody runs (CLAUDE.md, Testing)
 import pytest
-
-eccodes = pytest.importorskip("eccodes")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -253,3 +252,30 @@ def test_the_sanity_check_rejects_0h_and_accepts_the_hourly_encoding(tmp_path, f
     assert old[0] is None and old[1] is not None          # skt untouched; 0-H tp rejected
     fix.rewrite_hour(path, valid, {TP: np.zeros(6)})
     assert verdicts(path) == [None, None]
+
+
+def test_a_day_with_an_hour_missing_is_refused_before_anything_is_rewritten(tmp_path, fix):
+    arch = build_archive(tmp_path, fix)
+    arch['path_of'](DAY + timedelta(hours=15)).unlink()
+    before = {p: p.read_bytes() for p in (tmp_path / 'grib').iterdir()}
+    with pytest.raises(FileNotFoundError, match='2024-07-01T15'):
+        fix.fix_day(DAY, archive_days=MID_ARCHIVE, **arch)
+    assert {p: p.read_bytes() for p in (tmp_path / 'grib').iterdir()} == before
+
+
+def test_a_00z_declared_unrecoverable_is_written_missing_and_the_day_completes(tmp_path, fix):
+    arch = build_archive(tmp_path, fix)
+    import accum_hourly as ah
+    ah_snap = ah.snapshot_path(arch['snap_dir'], ah.State(DAY + timedelta(days=1), RUN))
+    pathlib.Path(ah_snap).unlink()                        # the 24 h file is a 0-byte stub
+
+    with pytest.raises(FileNotFoundError):                # by default: nothing is guessed
+        fix.fix_day(DAY, archive_days=MID_ARCHIVE, **arch)
+    problems = fix.fix_day(DAY, archive_days=MID_ARCHIVE, missing_00z_as_bitmap=True, **arch)
+
+    assert len(problems) == 1 and '2024-07-02T00' in problems[0]
+    nxt = read(arch['path_of'](DAY + timedelta(days=1)))[TP]
+    assert nxt['stepRange'] == '0-1' and np.all(nxt['values'] == 9999.0)   # bitmap, not zero
+    got = hourly_values(arch)
+    for h in range(2, 24):
+        assert abs(got[h][2] - 1e-3 * hourly_mm(h)) < 1e-8, h

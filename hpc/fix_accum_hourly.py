@@ -28,7 +28,7 @@ and renamed over the original.
 import os
 import sys
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 from eccodes import (codes_get, codes_get_message, codes_get_values,
@@ -150,7 +150,7 @@ def _difference(key, now, before):
 def _ref00(ref_dir, day, run):
     fields, meta = accum_ref.load_sidecar(accum_ref.sidecar_path(str(ref_dir), day))
     start = meta.get('SIMULATION_START_DATE')
-    if start and start != f"{run:%Y-%m-%d_%H:%M:%S}":
+    if start != f"{run:%Y-%m-%d_%H:%M:%S}":
         raise ValueError(f"00Z sidecar of {day:%Y-%m-%d} is from run {start}, not {run:%Y%m%d%H}")
     return fields
 
@@ -175,35 +175,66 @@ def fix_00z(valid, path_of, ref_dir, snap_dir, params, use_archive_23z):
     rewrite_hour(path_of(valid), valid, values)
 
 
-def fix_day(day, archive_days, path_of, ref_dir, snap_dir, params=None):
+def _write_missing(path, valid, params):
+    """The hour ending at `valid` as all-missing (bitmap): for a source declared lost."""
+    with open(path, 'rb') as fh:
+        gid = codes_grib_new_from_file(fh)
+        try:
+            size = codes_get(gid, 'numberOfDataPoints')
+        finally:
+            codes_release(gid)
+    rewrite_hour(path, valid, {pid: np.full(size, np.nan) for pid in params.values()})
+
+
+def fix_day(day, archive_days, path_of, ref_dir, snap_dir, params=None,
+            missing_00z_as_bitmap=False):
     """Make every accumulation of `day` hourly, and the 00Z that closes it.
 
     Order is what makes a crash harmless: the next day's 00Z first (it needs
     this day's 23Z still in the 0-H encoding), then 23Z down to 02Z (each needs
     the hour before it still untouched). A file already hourly is skipped.
 
-    Returns the problems that did not stop the day. Only the day's OWN 00Z can
-    be one (at the start of a block, when its native snapshots are missing):
-    nothing else depends on it. A next-day 00Z that cannot be computed raises
-    instead, before 23Z is touched -- once 23Z is hourly that hour could only
-    come from a native snapshot of 23Z, i.e. from fetching a 9 GB file again.
+    A 00Z whose snapshot is absent is never guessed. By default the day's OWN
+    00Z (start of a block) is left as it was and reported, since nothing
+    depends on it, while a missing NEXT-day 00Z stops the day before 23Z is
+    touched: once 23Z is hourly, that hour could only come from a native
+    snapshot of 23Z, i.e. from fetching a 9 GB file again. A snapshot may just
+    not have arrived yet, so that is the default. `missing_00z_as_bitmap` is
+    for a source declared lost: the 00Z is written all-missing (a bitmap,
+    never zero) and the rest of the day goes on.
+
+    Returns the problems that did not stop the day.
     """
     params = params or registry_params()
     pids = set(params.values())
     d0 = datetime(day.year, day.month, day.day)
     is_hourly = lambda v: read_accum(path_of(v), v, pids)[1]   # noqa: E731
     problems = []
+    absent = [f"{d0 + timedelta(hours=h):%Y-%m-%dT%H}" for h in range(1, 24)
+              if not os.path.isfile(path_of(d0 + timedelta(hours=h)))]
+    if absent:
+        raise FileNotFoundError(f"{d0:%Y-%m-%d} incomplete, nothing rewritten: no GRIB for {absent}")
 
     if (d0 - timedelta(days=1)).date() not in archive_days and os.path.isfile(path_of(d0)) \
             and not is_hourly(d0):
         try:
             fix_00z(d0, path_of, ref_dir, snap_dir, params, use_archive_23z=False)
         except FileNotFoundError as exc:
-            problems.append(f"{d0:%Y-%m-%dT%H} left 0-H: {exc}")
+            if missing_00z_as_bitmap:
+                _write_missing(path_of(d0), d0, params)
+                problems.append(f"{d0:%Y-%m-%dT%H} written missing: {exc}")
+            else:
+                problems.append(f"{d0:%Y-%m-%dT%H} left 0-H: {exc}")
     nxt = d0 + timedelta(days=1)
     if os.path.isfile(path_of(nxt)) and not is_hourly(nxt):
-        fix_00z(nxt, path_of, ref_dir, snap_dir, params,
-                use_archive_23z=not is_hourly(d0 + timedelta(hours=23)))
+        try:
+            fix_00z(nxt, path_of, ref_dir, snap_dir, params,
+                    use_archive_23z=not is_hourly(d0 + timedelta(hours=23)))
+        except FileNotFoundError as exc:
+            if not missing_00z_as_bitmap:
+                raise
+            _write_missing(path_of(nxt), nxt, params)
+            problems.append(f"{nxt:%Y-%m-%dT%H} written missing: {exc}")
     for h in range(23, 1, -1):
         v = d0 + timedelta(hours=h)
         now, hourly = read_accum(path_of(v), v, pids)
@@ -239,6 +270,9 @@ def main():
     ap.add_argument('--ledger', default=f'{WORK_DIR}/logs/fix_accum_hourly_status.log')
     ap.add_argument('--month', action='append', default=[], help='YYYY-MM (repeatable)')
     ap.add_argument('--date', action='append', default=[], help='YYYY-MM-DD (repeatable)')
+    ap.add_argument('--missing-00z-as-bitmap', action='store_true',
+                    help='write a 00Z whose snapshot is absent as all-missing instead of '
+                         'stopping: ONLY for a source declared lost, never for one in transit')
     args = ap.parse_args()
     if not args.month and not args.date:
         ap.error('give --month and/or --date')
@@ -256,16 +290,21 @@ def main():
     failed = 0
     for day in sorted(days):
         if not in_archive(day):
-            continue
-        neighbours = {(day + timedelta(days=k)).date() for k in (-1, 0)
-                      if in_archive(day + timedelta(days=k))}
-        try:
-            problems = fix_day(day, neighbours, path_of, args.accum_ref_dir, args.snap_dir, params)
-            status, detail = ('PARTIAL', ' ; '.join(problems)) if problems else ('FIXED', '')
-            failed += bool(problems)
-        except Exception as exc:          # noqa: BLE001 - recorded, the next day goes on
-            status, detail, failed = 'ERROR', f"{type(exc).__name__}: {exc}", failed + 1
-        line = f"{datetime.utcnow():%Y-%m-%dT%H:%M:%SZ} | {day:%Y-%m-%d} | {status} | {detail}"
+            present = [h for h in range(24) if os.path.isfile(path_of(day + timedelta(hours=h)))]
+            if not present:
+                continue                  # not converted at all: not this pass's business
+            status, detail, failed = 'INCOMPLETE', f"no 23Z GRIB; {len(present)}/24 hours present", failed + 1
+        else:
+            neighbours = {(day + timedelta(days=k)).date() for k in (-1, 0)
+                          if in_archive(day + timedelta(days=k))}
+            try:
+                problems = fix_day(day, neighbours, path_of, args.accum_ref_dir, args.snap_dir,
+                                   params, args.missing_00z_as_bitmap)
+                status, detail = ('PARTIAL', ' ; '.join(problems)) if problems else ('FIXED', '')
+                failed += bool(problems)
+            except Exception as exc:      # noqa: BLE001 - recorded, the next day goes on
+                status, detail, failed = 'ERROR', f"{type(exc).__name__}: {exc}", failed + 1
+        line = f"{datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%SZ} | {day:%Y-%m-%d} | {status} | {detail}"
         print(line, flush=True)
         with open(args.ledger, 'a') as fh:
             fh.write(line + '\n')
