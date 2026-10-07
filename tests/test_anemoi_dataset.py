@@ -3,7 +3,8 @@
 The production recipe (`wrf_anemoi_recipe.yaml`) is built with `anemoi-datasets create`
 over 2024-07-01T23..07-02T01, and the dataset that comes out is compared against the
 GRIB files read directly with eccodes. The window straddles 00Z on purpose: the
-accumulated variables change reference time there, and are exactly zero at 00Z.
+accumulated variables cover the hour ending at each date (#70), so at 00Z they hold
+the hour 23Z -> 00Z of the previous day, which comes from that day's run.
 
 The recipe is used as shipped except for two keys. `dates` is narrowed to the window,
 and `statistics` is widened to all three dates: anemoi's default statistics window is
@@ -143,8 +144,8 @@ def test_every_grib_message_is_one_dataset_variable(ds):
 def test_every_dataset_variable_equals_its_grib_message(ds, i_date):
     """Bit-identical in float32, NaN where the GRIB has a bitmap. Since every message is
     checked to be valid at the date it is compared at, this also proves that the
-    messages whose reference time is not their validity (the accumulations, referred to
-    00Z, and 10fg, referred to the previous hour) sit at their validity in the dataset."""
+    messages whose reference time is not their validity (the accumulations and 10fg,
+    both referred to the previous hour) sit at their validity in the dataset."""
     index = {name: i for i, name in enumerate(ds.variables)}
     stored = ds[i_date][:, 0, :]
     seen, shifted = set(), set()
@@ -160,15 +161,15 @@ def test_every_dataset_variable_equals_its_grib_message(ds, i_date):
         assert {"tp", "10fg"} <= shifted, shifted
 
 
-def test_accumulations_are_exactly_zero_at_00z_and_not_after(ds):
-    names = sorted(row["shortName"] for row in registry.WRF_TO_ECMWF_PARAMID.values()
-                   if row.get("stepType") == "accum")
-    assert "tp" in names
-    for name in names:
-        assert np.all(ds[T00][ds.name_to_index[name], 0] == 0.0), f"{name} is not zero at 00Z"
-    # 01Z holds the first hour of the day: precipitation and TOA insolation are not zero.
-    for name in ("tp", "tisr"):
-        assert np.nanmax(np.abs(ds[T01][ds.name_to_index[name], 0])) > 0.0, name
+def test_accumulations_hold_the_hour_ending_at_each_date_00z_included(ds):
+    """Downward longwave at the surface never stops, so the hour ending at any date is
+    positive at every point. Before #70 the 00Z message was zero by construction (the
+    accumulations were referred to 00Z), and the hour 23Z -> 00Z was in no file."""
+    for i in (T00, T01):
+        strd = ds[i][ds.name_to_index["strd"], 0]
+        assert np.nanmin(strd) > 0.0, f"strd not positive everywhere at {DATES[i]}"
+        # One hour of it, not a day: under 600 W/m^2 for 3600 s at every point.
+        assert np.nanmax(strd) < 600.0 * 3600.0, DATES[i]
 
 
 def test_grid_is_the_mercator_grid_eccodes_derives(ds):

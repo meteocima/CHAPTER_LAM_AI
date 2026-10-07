@@ -12,8 +12,9 @@ Three independent failure modes are covered:
 2. A field that raises inside the converter is reported and the run aborts, but a
    file produced by an older schema would pass unnoticed -- so the full set of
    (shortName -> number of messages) is compared against the registry.
-3. tp must carry the 00Z marker (generatingProcessIdentifier 128, see
-   accum_ref.py) and must be exactly zero in the 00Z file.
+3. Every accumulated field must cover the hour ending at the file's validity
+   (issue #70): reference time = validity - 1 h and a one-hour step. That is
+   what ERA5 publishes; until #70 the archive referred them to 00Z instead.
 
 Usage (eccodes env as in hpc/convert_step.sh):
     python hpc/check_grib_sanity.py <grib> [<grib> ...]
@@ -27,6 +28,7 @@ import glob
 import os
 import sys
 import time
+from datetime import datetime, timedelta
 
 from eccodes import codes_get, codes_grib_new_from_file, codes_release
 
@@ -51,14 +53,28 @@ for _info in WRF_TO_ECMWF_PARAMID.values():
 NEVER_EMPTY = {'lsm', 'z', 'sdor', 'slor', 'skt', 'al',
                'cvl', 'cvh', 'tvl', 'tvh', 'slt', 'cl', 'dl',
                'swvl1', 'swvl2', 'swvl3', 'swvl4', 'stl1', 'stl2', 'stl3', 'stl4'}
-TP_MARK = 128
+ACCUMULATED = {i['paramId'] for i in WRF_TO_ECMWF_PARAMID.values() if i.get('stepType') == 'accum'}
+
+
+def accumulation_problem(gid):
+    """None, or why an accumulated message is not the hour ending at its validity."""
+    param = codes_get(gid, 'paramId')
+    if param not in ACCUMULATED:
+        return None
+    valid = datetime.strptime(f"{codes_get(gid, 'validityDate')}{codes_get(gid, 'validityTime'):04d}", '%Y%m%d%H%M')
+    ref = datetime.strptime(f"{codes_get(gid, 'dataDate')}{codes_get(gid, 'dataTime'):04d}", '%Y%m%d%H%M')
+    length = codes_get(gid, 'endStep') - codes_get(gid, 'startStep')
+    if ref != valid - timedelta(hours=1) or length != 1:
+        return (f"{codes_get(gid, 'shortName')} not hourly "
+                f"(reference {ref:%Y-%m-%dT%H}, step {codes_get(gid, 'stepRange')})")
+    return None
 
 
 def check(path):
     problems = []
     found = collections.Counter()
     all_zero = set()
-    tp_gp = tp_max = None
+    not_hourly = []
     with open(path, 'rb') as fh:
         while True:
             gid = codes_grib_new_from_file(fh)
@@ -69,8 +85,9 @@ def check(path):
                 found[name] += 1
                 if name in NEVER_EMPTY and codes_get(gid, 'maximum') == 0 and codes_get(gid, 'minimum') == 0:
                     all_zero.add(name)
-                if codes_get(gid, 'paramId') == 228:
-                    tp_gp, tp_max = codes_get(gid, 'generatingProcessIdentifier'), codes_get(gid, 'maximum')
+                problem = accumulation_problem(gid)
+                if problem:
+                    not_hourly.append(problem)
             finally:
                 codes_release(gid)
 
@@ -80,12 +97,8 @@ def check(path):
         want, got = EXPECTED[name], found[name]
         if want != got:
             problems.append(f"{name}: {got} messages, expected {want}")
-    if tp_gp is None:
-        problems.append('tp missing')
-    elif tp_gp != TP_MARK:
-        problems.append(f"tp not referred to 00Z (genproc {tp_gp})")
-    elif path.endswith('00.grib') and tp_max != 0:
-        problems.append(f"00Z tp not zero (max {tp_max})")
+    if not_hourly:
+        problems.append(f"{len(not_hourly)} accumulations not hourly, e.g. {not_hourly[0]}")
     return problems
 
 
