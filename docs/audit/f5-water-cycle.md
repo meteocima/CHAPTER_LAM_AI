@@ -132,6 +132,10 @@ recorded reason it is not published as `ro`.
 
 ### Zero at 00Z, exactly
 
+*Superseded by [#71](https://github.com/meteocima/CHAPTER/issues/71): since 2026-10-07 every
+accumulation is the hour ending at its timestep, and 00Z holds the hour 23Z -> 00Z (see "The
+hour the 0-H archive did not hold" at the end). What follows was measured on the 0-H archive.*
+
 All six 00Z-referred fields, all 16 00Z files of the sample: **max = 0.0 and
 min = 0.0**. Not below a threshold — zero.
 
@@ -442,3 +446,41 @@ scheduler's risk budget is better spent elsewhere, on a field that
 and sits at 0.625 of ERA5's.
 
 Tracked for later as its own issue, not as a blocker.
+
+## The hour the 0-H archive did not hold
+
+Measured 2026-10-07 for [#70](https://github.com/meteocima/CHAPTER/issues/70), with
+`tools/audit/dayend_hour.py`. The run for day D starts at 18Z of D-1 and lasts 30 h
+(`run_hours = 30`), so it ends at 00Z of D+1; the archive takes 00Z of D+1 from the NEXT run.
+The 24 h file of run `2019020918` (`wrfout_d02_2019-02-11_00:00:00`, START_DATE
+2019-02-09_18) was fetched from the relay and set against that run's 23Z and 00Z of
+2019-02-10, and against the archived 00Z of 2019-02-11 (START_DATE 2019-02-10_18):
+
+| field | hour 23Z->00Z, mean | min, same run | share of the 24 h day | next run's 00Z - 23Z, mean | points where that is < 0 |
+|---|---|---|---|---|---|
+| `RAINNC` | 0.066 mm | 0 | **3.1 %** | -2.19 mm | **62.6 %** |
+| `SNOWNC` | 0.014 mm | 0 | **7.6 %** | -0.15 mm | 22.2 % |
+| `GRAUPELNC` | 0.0023 mm | 0 | 6.5 % | -0.030 mm | 23.0 % |
+| `SFROFF` | 0.0054 mm | 0 | 2.4 % | -0.22 mm | 29.3 % |
+| `ACLWDNB` | 1.02e6 J/m^2 | 5.4e5 | **4.2 %** | -2.4e7 J/m^2 | 100 % |
+| `ACLWUPT` | 8.4e5 J/m^2 | 4.3e5 | 4.2 % | -1.9e7 J/m^2 | 100 % |
+
+(The shortwave accumulators are zero over that hour: February night.) Within one run the hour
+is monotone on all 19 accumulators. Across runs it cannot be had: the two runs start from
+different accumulator values (6 h of spin-up against 29 h), and at the same instant their `T2`
+differs by +0.13 K in the mean and 10.46 K at most. A day's total in the 0-H archive therefore
+covered 23 hours of 24.
+
+The repair ([#71](https://github.com/meteocima/CHAPTER/issues/71)) needs no reconversion: the
+archived 0-H values of two consecutive hours of one run differ by the hourly value to one
+packing quantum (24-bit, 3.7e-9 m on `tp`, 1-2 J/m^2 on radiation; measured against the wrfout
+on 2024-01-15 and 2024-04-15), and the hour 23Z -> 00Z comes from a snapshot of each run's
+24 h file. On a copy of 2019-01-05 the 24 post-passed hours sum to the native 24 h - 00Z within
+0-10 quanta on 18 of 19 fields, and `tirf` within 4.7e-4 kg/m^2 -- the float32 noise of rain =
+total - snow - graupel, clipped at zero hour by hour. The hour 23Z -> 00Z held 3.8 % of that
+day's precipitation and 4.1 % of its downward longwave.
+
+Of the first ~70 24 h files fetched for the 2019 summer days of the archive, **46 are 0 bytes on
+the relay**, while the same runs' 24 archived files are whole; January 2019 and 2024 came back
+whole. Those 00Z hours stay 0-H until the files are recovered or their loss is verified on LRZ.
+

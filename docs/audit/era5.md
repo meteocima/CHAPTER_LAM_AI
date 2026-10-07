@@ -124,7 +124,11 @@ tp    base=20240715T0600 step=5-6   valid=20240715T1200 stepType=accum
 forecast based at 06Z or 18Z, and encodes it as a one-hour step range against
 that base. Instantaneous fields carry base = validity and step 0.
 
-Ours are accumulated **since 00Z of the same day**. The two are reconciled by a
+*Since [#71](https://github.com/meteocima/CHAPTER/issues/71) (2026-10-07) ours cover the
+same hour as ERA5's, 00Z included, and the harness compares hour to hour; what follows
+describes the 0-H archive this audit was run on.*
+
+Ours were accumulated **since 00Z of the same day**. The two are reconciled by a
 sum and nothing else:
 
 > ERA5's 00Z-referred accumulation at hour *H* of a day is the sum of its hourly

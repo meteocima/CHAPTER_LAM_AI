@@ -195,7 +195,7 @@ These matter for correct use and should be read together with the variable list.
   **`ro` equals `sro` to four significant figures at every timestep** — the identity
   `ro = sro + ssro` holds to 3.7e-9 m, there is simply nothing in the second term. The cause is
   the time reference, not the conversion: the model's drainage counter is alive, but it barely
-  moves *within a day*, and `ssro` is accumulated since 00 UTC. Against ERA5 the partition is
+  moves *within a day*, and `ssro` is the drainage of one hour. Against ERA5 the partition is
   the other way round (`sro` 1.0–4.6× ERA5, `ssro` 0.000–0.004×, `ro` 0.19–0.85×), so **do not
   close a water budget assuming this archive carries a drainage term.** All three are published
   because `ro` is the ERA5-canonical total; `ro` and `sro` are knowingly duplicate messages.
@@ -210,10 +210,11 @@ These matter for correct use and should be read together with the variable list.
   is total precipitation minus snow minus graupel.
 - **2 m dewpoint is now in kelvin.** The previous GRIB1 archive wrote it in degrees Celsius under
   a parameter that ECMWF defines in kelvin. If you read `2d` from the old files, it needs +273.15.
-- **Accumulated fields are referred to 00 UTC of the same day**, not to the start of the model run.
-  They are exactly zero at 00 UTC. In the GRIB files they carry a 0-to-H accumulation step with a
-  00 UTC reference time, so the validity time is the timestep itself. The 10 m wind maximum is the
-  exception: it covers the preceding hour only, because the model resets it at every output.
+- **Accumulated fields cover the hour ending at the validity time**, as in ERA5, not the time
+  since the start of the model run. In the GRIB files they carry a one-hour step with the
+  previous hour as reference time, so the validity time is the timestep itself; the 00 UTC file
+  holds the hour 23→00 UTC, taken from the previous day's run. The 10 m wind maximum covers the
+  same hour, because the model resets it at every output.
 - **Geolocation is now exact to 2 m** (2.009 m at most, measured). The grid declares the spherical earth of radius 6370 km
   that WRF actually integrates on. The previous GRIB1 files could not express this and were off by
   up to ~1.1 km at the northern edge of the domain.

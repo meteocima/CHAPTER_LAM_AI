@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Family 4: the accumulation machinery, and three checks that need no ERA5.
 
+WRITTEN FOR THE 0-H ARCHIVE. Since #71 (2026-10-07) every accumulation is the
+hour ending at its timestep, so the checks below that assume a reference at 00Z
+-- above all "exactly zero at 00Z" -- fail on current files by design. Kept as
+the record of how the 0-H archive was verified; tools/audit/harness.py is the
+one that was brought up to date.
+
 All thirteen are accumulated since 00Z and written with product definition
 template 8, which nothing in this audit has tested yet -- nineteen accumulators
 in the archive depend on the same machinery, and `CLAUDE.md` records that

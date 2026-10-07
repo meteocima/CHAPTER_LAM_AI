@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Family 5: the accumulation convention, tested hour by hour over whole days.
 
+WRITTEN FOR THE 0-H ARCHIVE. Since #71 (2026-10-07) every accumulation is the
+hour ending at its timestep, so the checks below that assume a reference at 00Z
+-- above all "exactly zero at 00Z" -- fail on current files by design. Kept as
+the record of how the 0-H archive was verified; tools/audit/harness.py is the
+one that was brought up to date.
+
 Family 4 verified the accumulation MACHINERY -- template 8, the 00Z reference,
 exact zero at 00Z, the sidecar subtraction -- on thirteen radiation fields. What
 this family owns is the part that machinery cannot settle: whether WRF's own

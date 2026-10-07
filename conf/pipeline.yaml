@@ -35,7 +35,7 @@ pipeline:
   # stage raw files for someone else; pair it with a dedicated paths.wrfout_dir.
   download_only: false
   # Convert but KEEP the input wrfout (convert_step.sh skips its rm). Used to convert
-  # staged files that must stay on disk. The 00Z sidecar invariant is unaffected.
+  # staged files that must stay on disk. Snapshots are still released (accum_hourly.release).
   keep_wrfout: false
   # A 00Z whose 24 h file (the previous day's run) was VERIFIED lost at the source on
   # LRZ: convert it with its 19 accumulations missing (bitmap) instead of waiting for

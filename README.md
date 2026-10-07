@@ -269,11 +269,12 @@ across the whole archive. `lsm` and `al` are **not**: WRF reclassifies sea-ice p
 runtime, so both move.
 
 ### Accumulations and time convention
-Accumulated fields are referred to **00Z of the same day**, not to run init, and carry
-`generatingProcessIdentifier=128`. They use product definition template 8, so their reference
-time is 00Z and their step is `0-H` while the instantaneous fields carry the valid time
-directly. **Index the archive on validity, never on `dataTime`.** CHAPTER_VARIABLES.md §3 has
-the details.
+Every accumulated field covers **the hour ending at its validity time**, as in ERA5 (#70, #71):
+product definition template 8, reference time H-1, step `0-1`, while the instantaneous fields
+carry the valid time directly. The 00Z file holds the hour 23Z -> 00Z, which only the previous
+day's run integrated, so its accumulations come from that run. **Index the archive on validity,
+never on `dataTime`**, and do not use `generatingProcessIdentifier`: it is 128 on every message.
+CHAPTER_VARIABLES.md §3 has the details.
 
 ### Not in the archive
 `MISSING_VARIABLES.md` records what cannot be produced from these wrfout at all (no TKE, no

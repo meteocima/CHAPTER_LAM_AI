@@ -40,6 +40,12 @@ masks and convective inhibition. They are listed in the repository's audit recor
 (`docs/audit/re-verification.md`) and are **not** properties of this archive. If you hold
 files from before the rebuild, replace them rather than reconciling them.
 
+**Every accumulated field covers the hour ending at its validity time**, 00 UTC included, as in
+ERA5 ([#70](https://github.com/meteocima/CHAPTER/issues/70)). Files written before 2026-10-07
+carry their accumulations summed from 00 UTC of the day instead, with nothing at 00 UTC: the hour
+23→00 UTC was in none of them. They are rewritten in place; a file is current when its
+accumulations' reference time is the previous hour.
+
 ## 0. The short list
 
 | # | Property | The number |
@@ -63,6 +69,7 @@ files from before the rebuild, replace them rather than reconciling them.
 | 8.1 | `generatingProcessIdentifier = 128` marks **every** message and discriminates nothing | 246 of 246 |
 | 8.2 | `al` is a two-season table value by category, not a continuous field | 8–11 distinct values domain-wide |
 | 8.3 | `slor` is the slope of the **resolved** 3 km terrain, not of sub-grid orography | eccodes shows the ECMWF name |
+| 8.5 | At 00 UTC the accumulations come from the **previous day's** model run | the hour 23→00: **3.1 %** of a February day's precipitation |
 
 ---
 
@@ -436,7 +443,9 @@ specific hour there is no flag in the file. Measured in
 | 2024-07-15T18 | 1.064e-4 | 3.9e-8 | **19** | 1.065e-4 |
 | 2024-08-15T12 | 1.453e-5 | **0** | **0** | 1.453e-5 |
 
-`ssro` is identically zero on five of the eighteen non-00Z sample timesteps, and where it is
+The table gives each timestep's accumulation since 00 UTC, i.e. the sum of the published hourly
+values from 01 UTC to that hour: summing does not rescue `ssro`. It is identically zero on five
+of the eighteen non-00Z sample timesteps, and where it is
 not, its domain mean is four to eight orders of magnitude below `sro`. **`ro` equals `sro` to
 four significant figures at every timestep.** The identity `ro = sro + ssro` holds to 3.7e-9 m;
 there is simply nothing in the second term.
@@ -444,8 +453,8 @@ there is simply nothing in the second term.
 The cause is the time reference, not the conversion. The model's sub-surface drainage counter is
 alive — non-zero at 462 to 8 363 points with maxima of 11 to 106 mm — but it barely moves *within
 a day*: on 2024-07-15 the same 1 647 points carry drainage at 00, 06, 12 and 18Z and only 19 of
-them grow. The published `ssro` is the accumulation since 00Z, so the daily field is almost
-always empty.
+them grow. Each published `ssro` is the drainage of one hour, so it is almost always empty, and
+even its sum over a day is.
 
 Against ERA5 the partition is the opposite way round: `sro` at 1.0–4.6 of ERA5's, `ssro` at
 0.000–0.004, `ro` at 0.19–0.85.
@@ -565,17 +574,15 @@ and measured in [#54](https://github.com/meteocima/CHAPTER/issues/54).
 ### 8.1 `generatingProcessIdentifier = 128` marks every message in the file
 
 Within `grib_v3` this key **discriminates nothing**: all 246 messages carry 128, because that is
-eccodes' own GRIB2 sample default and the converter sets it explicitly only for the
-accumulations. A consumer filtering on `generatingProcessIdentifier == 128` to find the
-00Z-referred accumulations selects the entire file, including every instantaneous field.
-
-Nothing in the data is wrong — the accumulations *are* referred to 00 UTC and 128 does say so.
-It simply says it of everything else too. The value's only real meaning is against the older
-GRIB1 archive, where 127 marks the run-init-referred messages.
+eccodes' own GRIB2 sample default. A consumer filtering on `generatingProcessIdentifier == 128` to
+find the accumulations selects the entire file, including every instantaneous field. The value's
+only real meaning is against the older GRIB1 archive, where 127 marks the run-init-referred
+messages.
 
 **What to do.** Test `stepType` / `typeOfStatisticalProcessing` and `stepRange`, which state it
-unambiguously and were both verified. See §3 of `CHAPTER_VARIABLES.md` for the time convention
-itself. Measured in [#53](https://github.com/meteocima/CHAPTER/issues/53).
+unambiguously: an accumulation has a one-hour step and the previous hour as reference time. See
+§3 of `CHAPTER_VARIABLES.md` for the time convention itself. Measured in
+[#53](https://github.com/meteocima/CHAPTER/issues/53).
 
 ### 8.2 `al` is a two-season table value by land-use category, not a continuous field
 
@@ -635,6 +642,27 @@ be our invention — without mentioning that the underlying field exists. It doe
 LAI, which is a second reason not to split it. Measured in
 [#35](https://github.com/meteocima/CHAPTER/issues/35).
 
+### 8.5 At 00 UTC the accumulations come from the previous day's run
+
+Each model run covers one day: it starts at 18 UTC of the day before (six hours of spin-up) and
+ends at 00 UTC of the day after. The archive's 00 UTC file belongs to the run for its own day,
+six hours into that run's spin-up, and its **instantaneous** fields come from there. That run
+has not integrated the hour 23→00 UTC of the previous day — the run for the previous day has,
+in its last hour — so the 00 UTC file's **accumulations** come from that other run. ERA5 does
+the same for the same reason: its accumulations at 00 UTC come from the forecast started at
+18 UTC.
+
+The hour is not small. On 2019-02-10 it held **3.1 %** of the day's precipitation, **7.6 %** of
+its snowfall and **4.2 %** of its downward longwave; its omission is why files written before
+2026-10-07 under-state every daily total.
+
+**What to do.** Nothing, as long as you index on validity time: the 00 UTC accumulations belong
+to the hour ending at 00 UTC, which is the last hour of the previous day. Expect a small
+discontinuity between the 00 UTC accumulations and the instantaneous fields in the same file —
+they are two runs, which differ by up to 10 K in `2t` at the same instant. Where the previous
+day's run cannot supply its last hour, those accumulations are **missing** (a bitmap), never
+zero. Measured in [#70](https://github.com/meteocima/CHAPTER/issues/70).
+
 ---
 
 ## Where the measurements live
@@ -651,7 +679,7 @@ in `docs/audit/`:
 | `docs/audit/f2-near-surface.md` | §3.3 |
 | `docs/audit/f3-column-integrals.md` | §1.2, §6.2 |
 | `docs/audit/f4-radiation.md` | §1.1 |
-| `docs/audit/f5-water-cycle.md` | §5, §6.1, §8.1 |
+| `docs/audit/f5-water-cycle.md` | §5, §6.1, §8.1, §8.5 |
 | `docs/audit/f6-soil-and-snow.md` | §7.1 |
 | `docs/audit/f7-static-and-surface.md` | §7.1, §8.2, §8.3 |
 | `docs/audit/f8-surface-exchange.md` | §1.3, §2, §7.2 |

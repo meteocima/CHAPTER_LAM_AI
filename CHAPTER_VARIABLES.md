@@ -53,19 +53,23 @@ or, for the radiation budget at the top of the atmosphere, `nominalTop`.
 - **Instantaneous fields** use product definition template **0**: `dataDate`/`dataTime` are the
   valid time.
 - **Accumulated fields** (`tp`, `tirf`, `sf`, `sro`, `ssro`, `ro`, and the whole radiation
-  budget) use template **8**, as their ECMWF definitions require. They are accumulated **from
-  00 UTC of the same day**: reference time 00 UTC, step `0–H`. They are exactly zero in the 00
-  UTC file.
-- **`10fg`** is the one exception: it is a **maximum over the preceding hour** (reference time
-  H−1, step `0–1`), and it is the maximum of the *resolved* 10 m wind, not a gust
+  budget) use template **8**, as their ECMWF definitions require, and each covers **the hour
+  ending at the validity time**, as ERA5 publishes them: reference time H−1, step `0–1`. The 00
+  UTC file holds the hour 23→00 UTC of the previous day. A day's total is the sum of its 24
+  hourly values, 01 UTC to 00 UTC of the next day.
+- **At 00 UTC the accumulations and the instantaneous fields come from different model runs.**
+  Each run starts at 18 UTC of the day before the one it covers and ends at 00 UTC of the day
+  after; the 00 UTC file's instantaneous fields come from the run for its own day, and its
+  accumulations from the run for the day before, the only one that integrated that hour.
+- **`10fg`** is a **maximum over the preceding hour** (reference time H−1, step `0–1`), like the
+  accumulations, and it is the maximum of the *resolved* 10 m wind, not a gust
   parameterisation.
 - A file therefore mixes reference times on purpose. **Index on validity
   (`validityDate`/`validityTime`), never on `dataTime`.**
-- To tell a 00 UTC-referred accumulation from an instantaneous field, test `stepType` (or
+- To tell an accumulation from an instantaneous field, test `stepType` (or
   `typeOfStatisticalProcessing`) and `stepRange`. **Do not use `generatingProcessIdentifier`**:
   it is 128 in every one of the 246 messages, because 128 is eccodes' own GRIB2 default, so inside
-  this archive it discriminates nothing. It means something only against the old GRIB1 archive,
-  where 127 marked run-init-referred accumulations.
+  this archive it discriminates nothing.
 
 ## 4. Declared approximations
 
@@ -287,38 +291,38 @@ variables=90 messages=246
 | `iews` | 229 | Instantaneous eastward turbulent surface stress | N/m^2 | surface | instantaneous |
 | `inss` | 230 | Instantaneous northward turbulent surface stress | N/m^2 | surface | instantaneous |
 | `lsm` | 172 | Land-sea mask | (0-1) | surface | instantaneous |
-| `ro` | 205 | Runoff (surface + sub-surface) | m | surface | accumulated since 00 UTC |
+| `ro` | 205 | Runoff (surface + sub-surface) | m | surface | hour ending at validity |
 | `rsn` | 33 | Snow density | kg/m^3 | surface | instantaneous |
 | `sd` | 141 | Snow depth (water equivalent) | m | surface | instantaneous |
 | `sdor` | 160 | Standard deviation of orography | m | surface | instantaneous |
-| `sf` | 144 | Snowfall (water equivalent) | m | surface | accumulated since 00 UTC |
+| `sf` | 144 | Snowfall (water equivalent) | m | surface | hour ending at validity |
 | `skt` | 235 | Skin temperature (inverted from upward longwave) | K | surface | instantaneous |
 | `slor` | 163 | Slope of orography (resolved, 3 km) | Numeric | surface | instantaneous |
 | `slt` | 43 | Soil type (ECMWF 7 classes) | ~ | surface | instantaneous, static |
 | `snowc` | 260038 | Snow cover | % | surface | instantaneous |
 | `sp` | 134 | Surface pressure | Pa | surface | instantaneous |
 | `src` | 198 | Skin reservoir content | m | surface | instantaneous |
-| `sro` | 8 | Surface runoff | m | surface | accumulated since 00 UTC |
-| `ssr` | 176 | Surface net solar radiation | J/m^2 | surface | accumulated since 00 UTC |
-| `ssrc` | 210 | Surface net solar radiation, clear sky | J/m^2 | surface | accumulated since 00 UTC |
-| `ssrd` | 169 | Surface solar radiation downwards | J/m^2 | surface | accumulated since 00 UTC |
-| `ssrdc` | 228129 | Surface solar radiation downwards, clear sky | J/m^2 | surface | accumulated since 00 UTC |
-| `ssro` | 9 | Sub-surface runoff | m | surface | accumulated since 00 UTC |
+| `sro` | 8 | Surface runoff | m | surface | hour ending at validity |
+| `ssr` | 176 | Surface net solar radiation | J/m^2 | surface | hour ending at validity |
+| `ssrc` | 210 | Surface net solar radiation, clear sky | J/m^2 | surface | hour ending at validity |
+| `ssrd` | 169 | Surface solar radiation downwards | J/m^2 | surface | hour ending at validity |
+| `ssrdc` | 228129 | Surface solar radiation downwards, clear sky | J/m^2 | surface | hour ending at validity |
+| `ssro` | 9 | Sub-surface runoff | m | surface | hour ending at validity |
 | `sst` | 34 | Sea surface temperature | K | surface | instantaneous |
 | `stl1` | 139 | Soil temperature level 1 (0-7 cm) | K | surface | instantaneous |
 | `stl2` | 170 | Soil temperature level 2 (7-28 cm) | K | surface | instantaneous |
 | `stl3` | 183 | Soil temperature level 3 (28-100 cm) | K | surface | instantaneous |
 | `stl4` | 236 | Soil temperature level 4 (100-289 cm) | K | surface | instantaneous |
-| `str` | 177 | Surface net thermal radiation | J/m^2 | surface | accumulated since 00 UTC |
-| `strc` | 211 | Surface net thermal radiation, clear sky | J/m^2 | surface | accumulated since 00 UTC |
-| `strd` | 175 | Surface thermal radiation downwards | J/m^2 | surface | accumulated since 00 UTC |
-| `strdc` | 228130 | Surface thermal radiation downwards, clear sky | J/m^2 | surface | accumulated since 00 UTC |
+| `str` | 177 | Surface net thermal radiation | J/m^2 | surface | hour ending at validity |
+| `strc` | 211 | Surface net thermal radiation, clear sky | J/m^2 | surface | hour ending at validity |
+| `strd` | 175 | Surface thermal radiation downwards | J/m^2 | surface | hour ending at validity |
+| `strdc` | 228130 | Surface thermal radiation downwards, clear sky | J/m^2 | surface | hour ending at validity |
 | `swvl1` | 39 | Volumetric soil water layer 1 (0-7 cm) | m^3/m^3 | surface | instantaneous |
 | `swvl2` | 40 | Volumetric soil water layer 2 (7-28 cm) | m^3/m^3 | surface | instantaneous |
 | `swvl3` | 41 | Volumetric soil water layer 3 (28-100 cm) | m^3/m^3 | surface | instantaneous |
 | `swvl4` | 42 | Volumetric soil water layer 4 (100-289 cm) | m^3/m^3 | surface | instantaneous |
-| `tirf` | 235015 | Time integral of rain flux (rain only) | kg/m^2 | surface | accumulated since 00 UTC |
-| `tp` | 228 | Total precipitation | m | surface | accumulated since 00 UTC |
+| `tirf` | 235015 | Time integral of rain flux (rain only) | kg/m^2 | surface | hour ending at validity |
+| `tp` | 228 | Total precipitation | m | surface | hour ending at validity |
 | `tsn` | 238 | Temperature of snow layer | K | surface | instantaneous |
 | `tvh` | 30 | Type of high vegetation (ECMWF code table 4.234) | ~ | surface | instantaneous, static |
 | `tvl` | 29 | Type of low vegetation (ECMWF code table 4.234) | ~ | surface | instantaneous, static |
@@ -343,11 +347,11 @@ with the season.
 |---|---|---|---|---|---|
 | `mucape` | 228235 | Most-unstable CAPE | J/kg | most unstable parcel | instantaneous |
 | `mucin` | 228236 | Most-unstable CIN | J/kg | most unstable parcel | instantaneous |
-| `tisr` | 212 | TOA incident solar radiation | J/m^2 | top of atmosphere | accumulated since 00 UTC |
-| `tsr` | 178 | Top net solar radiation | J/m^2 | top of atmosphere | accumulated since 00 UTC |
-| `tsrc` | 208 | Top net solar radiation, clear sky | J/m^2 | top of atmosphere | accumulated since 00 UTC |
-| `ttr` | 179 | Top net thermal radiation | J/m^2 | top of atmosphere | accumulated since 00 UTC |
-| `ttrc` | 209 | Top net thermal radiation, clear sky | J/m^2 | top of atmosphere | accumulated since 00 UTC |
+| `tisr` | 212 | TOA incident solar radiation | J/m^2 | top of atmosphere | hour ending at validity |
+| `tsr` | 178 | Top net solar radiation | J/m^2 | top of atmosphere | hour ending at validity |
+| `tsrc` | 208 | Top net solar radiation, clear sky | J/m^2 | top of atmosphere | hour ending at validity |
+| `ttr` | 179 | Top net thermal radiation | J/m^2 | top of atmosphere | hour ending at validity |
+| `ttrc` | 209 | Top net thermal radiation, clear sky | J/m^2 | top of atmosphere | hour ending at validity |
 
 
 ## 8. How the land-surface categories were translated

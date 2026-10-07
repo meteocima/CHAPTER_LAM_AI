@@ -79,6 +79,7 @@ GRIB_DIR = WORK / 'grib_audit'
 WRFOUT_DIR = WORK / 'wrfout_audit'
 ERA5_DIR = WORK / 'era5_audit'
 STATIC = WORK / 'static_v1' / 'chapter_static_d02.npz'
+ACCUM_SNAP_DIR = Path(os.environ.get('ACCUM_SNAP_DIR', WORK / 'accum_snap'))   # #71: states bounding an hour
 GRID_CACHE = ERA5_DIR / 'wrf_grid.npz'
 SAMPLE_MD = PROJECT / 'docs' / 'audit' / 'sample.md'
 
@@ -569,11 +570,12 @@ def unit_factor(src_units, dst_units):
 def era5_counterpart(token, ctx, level=None):
     """The ERA5 field our message at this timestep should be compared against.
 
-    Accumulated variables are summed: ERA5 accumulates over the hour ending at
-    the validity time, we accumulate since 00Z, so the counterpart at hour H is
-    the sum of ERA5's hourly values valid 01Z..HZ of the same day. The message
-    stamped 00Z is the hour 23Z->00Z of the day before and is excluded. `10fg`
-    is not summed: it is a one-hour maximum on both sides.
+    Accumulated variables cover the hour ending at the validity time on both
+    sides since #71, 00Z included (ERA5's 00Z message is the hour 23Z->00Z of
+    the day before, and so is ours), so the counterpart is ERA5's message valid
+    at the same hour, like `10fg`. Until #71 ours were summed from 00Z and this
+    function summed ERA5's hours 01Z..HZ to match; a `grib_v3` file not yet
+    through hpc/fix_accum_hourly.py still is, and check_grib_sanity rejects it.
     """
     kind = 'pl' if level is not None else 'sl'
     shortname = short_of(token)
@@ -596,22 +598,10 @@ def era5_counterpart(token, ctx, level=None):
                 return values
         return None
 
-    if not accumulated:
-        field = at(hour)
-        if field is None:
-            return None, f'no ERA5 {shortname} valid at {hour:02d}Z'
-        return field, None
-
-    if hour == 0:
-        return None, ('accumulated since 00Z, so ours is zero by construction '
-                      'and there is nothing to compare at 00Z')
-    total = None
-    for h in range(1, hour + 1):
-        field = at(h)
-        if field is None:
-            return None, f'no ERA5 {shortname} valid at {h:02d}Z'
-        total = field if total is None else total + field
-    return total, None
+    field = at(hour)
+    if field is None:
+        return None, f'no ERA5 {shortname} valid at {hour:02d}Z'
+    return field, None
 
 
 def _registry_entry(token):
@@ -787,10 +777,13 @@ def leg_b(token, message, timestep):
     """Compare the encoded field against the source it was made from.
 
     Same grid, same instant: a factor, a sign or a unit conversion shows up to
-    machine precision. Accumulated variables are referred to 00Z of the same
-    day, so the source is read at this hour AND at 00Z and subtracted here --
-    independently of the accumulation sidecar, which is therefore also under
-    test.
+    machine precision. Accumulated variables are the hour ending now (#71):
+    the source is the increment between the two states of the same run that
+    bound it (accum_hourly.increments: this wrfout and the one before, or for
+    00Z the previous day's run, its 24 h file and 23Z), read from the
+    snapshots in ACCUM_SNAP_DIR or from wrfouts beside this one. The audit
+    sample stages single hours, so without those states the leg is skipped,
+    not guessed.
     """
     kind, source = leg_b_kind(token)
     result = {'kind': kind, 'source': source}
@@ -801,8 +794,14 @@ def leg_b(token, message, timestep):
 
     entry = _registry_entry(token)
     accumulated = entry.get('stepType') == 'accum'
-    date = timestep.split('T')[0]
-    zero_hour = f'{date}T00'
+    hour_inc = None
+    if accumulated:
+        import accum_hourly
+        try:
+            hour_inc = accum_hourly.increments(wrfout_path(timestep), ACCUM_SNAP_DIR)
+        except FileNotFoundError as exc:
+            result['note'] = f'the states bounding this hour are not staged ({exc})'
+            return result
 
     if kind == 'direct' and token in STATIC_FIELDS:
         static = np.load(STATIC, allow_pickle=True)
@@ -814,13 +813,7 @@ def leg_b(token, message, timestep):
         if values is None:
             result['note'] = f'{name} is absent from the wrfout'
             return result
-        field = values
-        if accumulated:
-            base = _read_wrfout_vars(zero_hour, [name])[name][0]
-            if base is None:
-                result['note'] = f'{name} is absent from the 00Z wrfout'
-                return result
-            field = field - base
+        field = hour_inc[name] if accumulated else values
     else:                                       # identity
         plus, minus = LEG_B_IDENTITY[token]
         needed = list(plus) + list(minus)
@@ -829,14 +822,11 @@ def leg_b(token, message, timestep):
         if missing:
             result['note'] = f'absent from the wrfout: {missing}'
             return result
-        base = _read_wrfout_vars(zero_hour, needed) if accumulated else None
         field = np.zeros_like(now[needed[0]][0])
         for name in plus:
-            field = field + (now[name][0] - base[name][0] if accumulated
-                             else now[name][0])
+            field = field + (hour_inc[name] if accumulated else now[name][0])
         for name in minus:
-            field = field - (now[name][0] - base[name][0] if accumulated
-                             else now[name][0])
+            field = field - (hour_inc[name] if accumulated else now[name][0])
         src_units = now[needed[0]][1]
 
     factor, how = unit_factor(src_units, message['units'])
