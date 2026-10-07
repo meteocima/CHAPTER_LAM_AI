@@ -151,13 +151,72 @@ def load_snapshot(snap_dir, state):
     return fields
 
 
+def _local_wrfout(state, near):
+    """A wrfout of `state` next to `near`: in the same directory, or in the
+    pipeline's <wrfout_dir>/<date>/ layout. Checked by its content."""
+    name = source_file(state)[1]
+    here = os.path.dirname(os.path.abspath(str(near)))
+    for cand in (os.path.join(here, name),
+                 os.path.join(os.path.dirname(here), f"{state.valid:%Y-%m-%d}", name)):
+        if os.path.isfile(cand) and state_of(cand) == state:
+            return cand
+    return None
+
+
+def _snapshot_or_local(snap_dir, state, near):
+    try:
+        return load_snapshot(snap_dir, state)
+    except FileNotFoundError:
+        local = _local_wrfout(state, near)
+        if local is None:
+            raise
+        write_snapshot(local, snap_dir)
+        return load_snapshot(snap_dir, state)
+
+
+def increments(input_file, snap_dir):
+    """{native accumulator: its increment over the hour ending at the input's
+    validity}, native units, float64. For 01Z..23Z the input itself is the
+    current state; for 00Z it is not -- it belongs to the next run, 6 h into
+    its spin-up -- and both states come from the run for the previous day.
+    A state with neither a snapshot nor a local wrfout raises FileNotFoundError:
+    an hour is never guessed."""
+    own = state_of(input_file)
+    curr, prev = window(own.valid)
+    if own == curr:
+        fields, _ = accum_ref.extract_from_wrfout(str(input_file))
+    elif own.valid.hour == 0:
+        fields = _snapshot_or_local(snap_dir, curr, input_file)
+    else:
+        raise ValueError(f"{input_file} is from run {own.run:%Y%m%d%H}, not the run for its "
+                         f"day ({curr.run:%Y%m%d%H})")
+    before = _snapshot_or_local(snap_dir, prev, input_file)
+    return {v: fields[v].astype(np.float64) - before[v] for v in accum_ref.ACCUMULATED_VARS}
+
+
+def consumed(valid):
+    """The snapshots the hour ending at `valid` reads -- and nothing else reads:
+    each state is the previous state of exactly one hour."""
+    curr, prev = window(valid)
+    return [curr, prev] if valid.hour == 0 else [prev]
+
+
 def _cli(argv):
-    if len(argv) != 3 or argv[0] != 'snapshot':
-        print("usage: python accum_hourly.py snapshot <wrfout> <snap_dir>")
-        return 2
-    state = write_snapshot(argv[1], argv[2])
-    print(f"written: {snapshot_path(argv[2], state)}")
-    return 0
+    if len(argv) == 3 and argv[0] == 'snapshot':
+        state = write_snapshot(argv[1], argv[2])
+        print(f"written: {snapshot_path(argv[2], state)}")
+        return 0
+    if len(argv) == 3 and argv[0] == 'consumed':
+        # Run by convert_step.sh once the GRIB is in place, when it deletes the wrfout.
+        for state in consumed(datetime.strptime(argv[1], '%Y-%m-%dT%H')):
+            path = snapshot_path(argv[2], state)
+            if os.path.isfile(path):
+                os.remove(path)
+                print(f"deleted: {path}")
+        return 0
+    print("usage: python accum_hourly.py snapshot <wrfout> <snap_dir>\n"
+          "       python accum_hourly.py consumed <YYYY-MM-DDTHH> <snap_dir>")
+    return 2
 
 
 if __name__ == '__main__':

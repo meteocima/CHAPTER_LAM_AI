@@ -16,8 +16,8 @@
 #   GRIB_DIR      - output directory for GRIB files
 #   PROJECT_DIR   - path to CHAPTER repo (for convert_to_pressure_levels.py)
 #   GRIB_TEMPLATE - output filename template (Python .format() style)
-#   ACCUM_REF_DIR - (optional) 00Z reference sidecars for accumulated fields
-#                   (accum_ref.py); default: <GRIB_DIR>/../accum_ref
+#   ACCUM_SNAP_DIR- (optional) accumulator snapshots (accum_hourly.py): each hour is
+#                   differenced against the state before it; default: <GRIB_DIR>/../accum_snap
 #   STATIC_REF_DIR- (optional) geo_em sidecar for the static land fields
 #                   (static_ref.py); default: <GRIB_DIR>/../static_v1
 #   KEEP_WRFOUT   - (optional) "1" to keep the input wrfout after a successful convert
@@ -37,9 +37,8 @@ OUTPUT="${GRIB_DIR}/${YEAR}/${MONTH}/${GRIB_TEMPLATE}"
 # Expand template variables in output filename
 OUTPUT=$(echo "${OUTPUT}" | sed "s/{year}/${YEAR}/g; s/{date_compact}/${DATE_COMPACT}/g; s/{hour:02d}/${HOUR}/g")
 mkdir -p "$(dirname "${OUTPUT}")"
-# tp is referred to 00Z of the same day: the 00Z fields live in this sidecar
-ACCUM_REF_DIR="${ACCUM_REF_DIR:-$(dirname "${GRIB_DIR%/}")/accum_ref}"
-ACCUM_REF="${ACCUM_REF_DIR}/${YEAR}/${MONTH}/accum_ref_${DATE_COMPACT}.npz"
+# Accumulations are the hour ending now, against the snapshot of the state before
+ACCUM_SNAP_DIR="${ACCUM_SNAP_DIR:-$(dirname "${GRIB_DIR%/}")/accum_snap}"
 # cvl/cvh/tvl/tvh/slt/cl/dl come from geo_em, read once into this sidecar
 STATIC_REF_DIR="${STATIC_REF_DIR:-$(dirname "${GRIB_DIR%/}")/static_v1}"
 TMPOUT="${OUTPUT}.tmp"
@@ -85,18 +84,18 @@ export LD_LIBRARY_PATH="$GCC12_RT:$ECCODES_LIB:${LD_LIBRARY_PATH:-}"
 uv run python convert_to_pressure_levels.py \
     --input "${INPUT}" \
     --output "${TMPOUT}" \
-    --accum-ref-dir "${ACCUM_REF_DIR}" \
+    --accum-snap-dir "${ACCUM_SNAP_DIR}" \
     --static-ref-dir "${STATIC_REF_DIR}"
 
 # Atomic rename on success
 mv "${TMPOUT}" "${OUTPUT}"
 
 echo ""
-# Convert jobs of the same day run independently and in any order, and every
-# non-00Z hour needs the 00Z fields: never delete the 00Z wrfout unless its
-# sidecar exists (the converter writes it when the input is 00Z).
-if [ "${HOUR}" = "00" ] && [ ! -s "${ACCUM_REF}" ]; then
-    echo "ERROR: 00Z reference sidecar missing (${ACCUM_REF}); keeping ${INPUT}"
+# The next hour is differenced against this file's state: never delete a wrfout
+# whose snapshot is missing (the converter writes it). Then drop the snapshots
+# this hour consumed -- no other hour reads them (accum_hourly.consumed).
+if ! uv run python -c "import accum_hourly, os, sys; sys.exit(not os.path.isfile(accum_hourly.snapshot_path(sys.argv[2], accum_hourly.state_of(sys.argv[1]))))" "${INPUT}" "${ACCUM_SNAP_DIR}"; then
+    echo "ERROR: no snapshot of ${INPUT} in ${ACCUM_SNAP_DIR}; keeping it"
     exit 1
 fi
 if [ "${KEEP_WRFOUT:-0}" = "1" ]; then
@@ -106,3 +105,4 @@ fi
 echo "Conversion successful. Cleaning up wrfout..."
 timeout 60 rm -f "${INPUT}"
 echo "Deleted: ${INPUT}"
+uv run python accum_hourly.py consumed "${TARGET_DATE}T${HOUR}" "${ACCUM_SNAP_DIR}" || true

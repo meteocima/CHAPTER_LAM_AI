@@ -63,7 +63,7 @@ def test_negative_noise_is_clipped_except_on_net_radiation():
     assert out['str'][0] == -300.0              # net longwave is legitimately negative
 
 
-def _fake_wrfout(path, start, times):
+def _fake_wrfout(path, start, times, scale=0.0):
     """A wrfout with only what identifies the state: run start and valid time."""
     import netCDF4
     import numpy as np
@@ -77,7 +77,7 @@ def _fake_wrfout(path, start, times):
         t = ds.createVariable('Times', 'S1', ('Time', 'DateStrLen'))
         t[0, :] = np.array(list(times), 'S1')
         for i, v in enumerate(__import__('accum_ref').ACCUMULATED_VARS):
-            ds.createVariable(v, 'f4', ('Time', 'south_north', 'west_east'))[0] = i
+            ds.createVariable(v, 'f4', ('Time', 'south_north', 'west_east'))[0] = i + scale
     return path
 
 
@@ -101,3 +101,42 @@ def test_a_snapshot_is_found_again_by_its_state_and_only_by_it(tmp_path):
     other_run = ah.State(state.valid, datetime(2019, 2, 10, 18))
     with pytest.raises(FileNotFoundError):
         ah.load_snapshot(snaps, other_run)
+
+
+def test_an_hour_is_the_input_minus_the_previous_state_of_the_same_run(tmp_path):
+    snaps = tmp_path / 'snaps'
+    prev = _fake_wrfout(tmp_path / 'w04', '2019-02-01_18:00:00', '2019-02-02_04:00:00', 10.0)
+    ah.write_snapshot(prev, snaps)
+    inp = _fake_wrfout(tmp_path / 'w05', '2019-02-01_18:00:00', '2019-02-02_05:00:00', 12.5)
+    inc = ah.increments(inp, snaps)
+    assert inc['RAINNC'][0, 0] == 2.5 and inc['ACLWUPTC'][1, 2] == 2.5
+
+
+def test_a_missing_snapshot_is_made_from_the_wrfout_next_to_the_input(tmp_path):
+    # The pipeline layout: <wrfout_dir>/<date>/wrfout_d02_<date>_<HH>:00:00
+    d = tmp_path / '2019-02-02'
+    d.mkdir()
+    _fake_wrfout(d / 'wrfout_d02_2019-02-02_04:00:00', '2019-02-01_18:00:00', '2019-02-02_04:00:00', 10.0)
+    inp = _fake_wrfout(d / 'wrfout_d02_2019-02-02_05:00:00', '2019-02-01_18:00:00',
+                       '2019-02-02_05:00:00', 11.0)
+    assert ah.increments(inp, tmp_path / 'snaps')['RAINNC'][0, 0] == 1.0
+
+
+def test_00z_ignores_the_input_and_takes_two_states_of_the_previous_days_run(tmp_path):
+    import pytest
+    snaps = tmp_path / 'snaps'
+    # The archived 00Z (run for 02-11): 6 h of spin-up, useless for the hour.
+    inp = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_00:00:00', 3.0)
+    with pytest.raises(FileNotFoundError, match='2019020918'):
+        ah.increments(inp, snaps)
+    ah.write_snapshot(_fake_wrfout(tmp_path / 'a', '2019-02-09_18:00:00',
+                                   '2019-02-11_00:00:00', 40.0), snaps)
+    ah.write_snapshot(_fake_wrfout(tmp_path / 'b', '2019-02-09_18:00:00',
+                                   '2019-02-10_23:00:00', 39.0), snaps)
+    assert ah.increments(inp, snaps)['RAINNC'][0, 0] == 1.0
+
+
+def test_the_snapshots_an_hour_consumes():
+    curr, prev = ah.window(datetime(2019, 2, 11, 0))
+    assert ah.consumed(datetime(2019, 2, 11, 0)) == [curr, prev]       # 24 h file and 23Z
+    assert ah.consumed(datetime(2019, 2, 11, 5)) == [ah.window(datetime(2019, 2, 11, 5))[1]]

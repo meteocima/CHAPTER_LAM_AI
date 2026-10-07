@@ -32,6 +32,13 @@ TOKEN_KINDS = {
     'FETCH_ERROR': PROBLEM,
     'SKIP_OFFLINE': PROBLEM,
     'REF_UNAVAILABLE': PROBLEM,
+    # #71: every accumulation is the hour ending at its timestep, differenced
+    # against a snapshot of the state before it. A fetched file whose snapshot
+    # could not be written, a 24 h file that could not be had for a 00Z, and an
+    # hour whose snapshots are still missing when the window is done.
+    'SNAPSHOT_FAILED': PROBLEM,
+    'DAYEND_UNAVAILABLE': PROBLEM,
+    'CONVERT_BLOCKED': PROBLEM,
 
     # about the chain itself, keyed DRIVER@<host> and not about any timestep
     'RESPAWN_FAILED': CHAIN,
@@ -41,7 +48,8 @@ TOKEN_KINDS = {
     # TAPE_TIMEOUT and UNREADABLE_TAPE were renamed (cae74a3, c67b7f9);
     # CONVERT_RESUBMITTED never existed in a committed driver at all, so the
     # share2024 chain ran a locally edited one -- which the snapshot mechanism
-    # allows and this table has to survive
+    # allows and this table has to survive. REF_OK and REF_UNAVAILABLE belonged
+    # to the 00Z reference, which hourly accumulations replaced (#71)
     'TAPE_TIMEOUT': PROBLEM,
     'UNREADABLE_TAPE': PROBLEM,
     'CONVERT_RESUBMITTED': CLEAR,
@@ -49,7 +57,8 @@ TOKEN_KINDS = {
 
 # Of the above, the ones no current driver writes. Named so that the drift test
 # can tell "the driver gained a token" from "the driver lost one".
-HISTORICAL = frozenset({'TAPE_TIMEOUT', 'UNREADABLE_TAPE', 'CONVERT_RESUBMITTED'})
+HISTORICAL = frozenset({'TAPE_TIMEOUT', 'UNREADABLE_TAPE', 'CONVERT_RESUBMITTED',
+                        'REF_OK', 'REF_UNAVAILABLE'})
 
 Summary = collections.namedtuple('Summary', 'problems chain_events unknown')
 

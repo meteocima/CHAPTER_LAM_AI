@@ -17,9 +17,9 @@ error at the northern edge of the domain.
 
 Adding a field is a registry entry plus, if it is derived, one block here. A
 native wrfout variable needs no code at all: the pass-through loop below already
-knows how to interpolate it to the pressure levels and how to refer an
-accumulator to 00Z. A derived accumulator needs its native dependencies listed
-in ACCUM_DEPS as well, or its 00Z reference will not be loaded.
+knows how to interpolate it to the pressure levels. An accumulated field is
+the one exception: what is published from the native accumulators is defined
+once, in accum_hourly.published, which the archive's post-pass shares.
 """
 
 import argparse
@@ -34,8 +34,8 @@ from eccodes import (codes_grib_new_from_samples, codes_set, codes_set_values,
                      codes_write, codes_release)
 
 from wrf_era5_comparison import WRF_TO_ECMWF_PARAMID, PRESSURE_LEVELS, EXPECTED_MESSAGES
-# Accumulated fields are referred to 00Z of the same day (see accum_ref.py)
-import accum_ref
+# Accumulated fields cover the hour ending at the validity time (see accum_hourly.py)
+import accum_hourly
 # Static land fields come from a geo_em sidecar (see static_ref.py)
 import static_ref
 # Relative humidity as the IFS defines it, which is not what wrf-python computes
@@ -46,16 +46,12 @@ WRF_EARTH_RADIUS = 6370000  # m, the sphere WRF integrates on
 MISSING = 9999.0            # GRIB missing-value sentinel, paired with a bitmap
 PACKING = 'grid_ccsds'      # lossless; ~same size as second-order, much faster
 
-# Multiplicative factor applied to a native field (after the 00Z subtraction,
-# where one applies) to reach the units its ECMWF parameter is defined in.
+# Multiplicative factor applied to a native field to reach the units its ECMWF
+# parameter is defined in. The accumulated fields carry theirs in accum_hourly.
 UNIT_SCALE = {
     'HGT': G,           # m -> m^2/s^2
     'SNOW': 1e-3,       # kg/m^2 -> m of water equivalent
     'CANWAT': 1e-3,     # kg/m^2 -> m of water equivalent
-    'RAINNC': 1e-3,     # mm     -> m
-    'SNOWNC': 1e-3,     # mm     -> m
-    'SFROFF': 1e-3,     # mm     -> m
-    'UDROFF': 1e-3,     # mm     -> m
     'ACSNOM': 1e-3,     # kg/m^2 -> m of water equivalent
     'SNOWC': 100.0,     # (0-1)  -> % (ERA5 reports snow cover in per cent)
 }
@@ -199,32 +195,6 @@ EMISS_SNOWC_FULL = 0.015
 # Cloud bands, as fractions of surface pressure (ECMWF convention).
 CLOUD_BANDS = {'lcc': (1.00, 0.80), 'mcc': (0.80, 0.45), 'hcc': (0.45, 0.00)}
 
-# Net radiation, ECMWF sign convention: downward minus upward. There is no
-# downward longwave at the top of the atmosphere (ACLWDNT is identically zero),
-# so ttr/ttrc are just minus the upward flux and come out negative.
-NET_RADIATION = {
-    'ssr':  ('ACSWDNB', 'ACSWUPB'),    'ssrc': ('ACSWDNBC', 'ACSWUPBC'),
-    'str':  ('ACLWDNB', 'ACLWUPB'),    'strc': ('ACLWDNBC', 'ACLWUPBC'),
-    'tsr':  ('ACSWDNT', 'ACSWUPT'),    'tsrc': ('ACSWDNTC', 'ACSWUPTC'),
-    'ttr':  (None, 'ACLWUPT'),         'ttrc': (None, 'ACLWUPTC'),
-}
-
-# Accumulated fields that are a combination of native accumulators: which native
-# names their 00Z reference has to carry. Anything not listed references itself.
-# Every name here must also be in accum_ref.ACCUMULATED_VARS, or the sidecar will
-# not hold it and the conversion will abort.
-ACCUM_DEPS = {
-    # sf is ECMWF's paramId 144, "snowfall": ALL solid precipitation reaching
-    # the surface, large-scale and convective together, because IFS has no
-    # graupel category to separate. WSM6 does, so ours has to add it back or
-    # the archive's solid precipitation is short by whatever froze into
-    # graupel rather than snow -- 6.4% of the published snowfall in the domain
-    # mean on a February day, 11.97 mm at a point (issue #52).
-    'SNOWNC': ('SNOWNC', 'GRAUPELNC'),
-    'tirf': ('RAINNC', 'SNOWNC', 'GRAUPELNC'),
-    'ro':   ('SFROFF', 'UDROFF'),
-    **{k: tuple(n for n in pair if n) for k, pair in NET_RADIATION.items()},
-}
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -240,9 +210,10 @@ def parse_args():
              "Required for the static land fields "
              + "/".join(static_ref.STATIC_VARS))
     parser.add_argument(
-        "--accum-ref-dir", default=None,
-        help="Directory of 00Z reference sidecars for accumulated fields (accum_ref.py). "
-             "Without it, the 00Z wrfout must sit next to --input")
+        "--accum-snap-dir", default=None,
+        help="Directory of accumulator snapshots (accum_hourly.py): the states each "
+             "hour is differenced against. A state with no snapshot is taken from a "
+             "wrfout next to --input, or the conversion fails")
     return parser.parse_args()
 
 
@@ -276,10 +247,11 @@ def _set_grid(gid, grid):
 def _set_time(gid, info, valid):
     """Instantaneous by default; statistically processed fields use template 8.
 
-    'accum' fields are accumulated from 00Z of the same day, so the reference
-    time is that 00Z and the step runs 0..H. 'max1h' fields (the 10 m wind
-    maximum, which WRF resets at every output) cover the preceding hour only.
-    Either way validityDate/validityTime resolve to this timestep.
+    Both statistically processed kinds cover the hour ending at this timestep,
+    reference H-1 and step 0-1, as ERA5 publishes them: 'accum' fields because
+    they are differenced over that hour (accum_hourly.py, #70), 'max1h' (the
+    10 m wind maximum) because WRF resets it at every output. Either way
+    validityDate/validityTime resolve to this timestep.
     """
     step = info.get('stepType')
     if step is None:
@@ -289,12 +261,9 @@ def _set_time(gid, info, valid):
         codes_set(gid, 'endStep', 0)
         return
 
-    if step == 'accum':
-        ref, end = valid.normalize(), valid.hour
-    elif step == 'max1h':
-        ref, end = valid - pd.Timedelta(hours=1), 1
-    else:
+    if step not in ('accum', 'max1h'):
         raise ValueError(f"unknown stepType {step!r}")
+    ref, end = valid - pd.Timedelta(hours=1), 1
 
     codes_set(gid, 'productDefinitionTemplateNumber', 8)
     codes_set(gid, 'dataDate', int(ref.strftime('%Y%m%d')))
@@ -316,14 +285,6 @@ def write_message(fout, values, info, level, grid, valid):
         if info['levelType'] is not None:
             codes_set(gid, 'typeOfLevel', info['levelType'])
             codes_set(gid, 'level', int(level))
-        if info.get('stepType') == 'accum':
-            # Marker kept from the GRIB1 schema: accumulation referred to 00Z.
-            # It discriminates nothing INSIDE a grib_v3 file: 128 is eccodes'
-            # own GRIB2 sample default, so all 246 messages carry it whether or
-            # not this line runs. Its only meaning is against the GRIB1 tree,
-            # where 127 marks run-init-referred. A consumer wanting the
-            # accumulations tests stepType/stepRange (issue #53).
-            codes_set(gid, 'generatingProcessIdentifier', accum_ref.ACCUM_FROM_00Z_GENPROC)
 
         flat = np.asarray(values, dtype=np.float64).ravel()
         if np.isnan(flat).any():
@@ -341,7 +302,7 @@ def write_message(fout, values, info, level, grid, valid):
 # main
 # ============================================================================
 
-def main(input_file, output_file, debug_vars=None, accum_ref_dir=None,
+def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
          static_ref_dir=None):
     debug_vars = debug_vars or []
 
@@ -465,38 +426,26 @@ def main(input_file, output_file, debug_vars=None, accum_ref_dir=None,
         sea = (landmask == 0)
         land_permanent = (landmask != 0)
 
-    # ---------------- 00Z reference for accumulated fields ------------------
-    # Loaded outside any try/except: a missing reference must abort the run
-    # rather than silently produce run-init-referred accumulations.
+    # ---------------- accumulated fields: the hour ending now ---------------
+    # Outside any try/except: a state that cannot be found must abort the run
+    # rather than let an hour be guessed (#70). For 00Z the input supplies only
+    # the instantaneous fields; its hour comes from the run for the day before.
     accum_keys = [k for k, v in WRF_TO_ECMWF_PARAMID.items()
                   if v.get('stepType') == 'accum' and (not debug_vars or k in debug_vars)]
-    # Some are combinations, so ask for the native fields they need.
-    needed = set()
-    for k in accum_keys:
-        needed.update(ACCUM_DEPS.get(k, (k,)))
-    needed = sorted(n for n in needed if n in ncfile.variables)
-    accum_00z = {}
-    if needed:
-        print("\n=== 00Z REFERENCE FOR ACCUMULATED FIELDS ===")
-        if valid.hour == 0:
-            fields, meta = accum_ref.extract_from_wrfout(input_file)
-            accum_00z = {v: fields[v] for v in needed}
-            if accum_ref_dir:
-                sidecar = accum_ref.sidecar_path(accum_ref_dir, valid)
-                if not os.path.isfile(sidecar):
-                    accum_ref.write_sidecar(sidecar, fields, meta)
-                    print(f"  wrote 00Z sidecar: {sidecar}")
-            print(f"  input is 00Z: {needed} are zero by construction")
-        else:
-            accum_00z, src = accum_ref.get_reference(
-                input_file, valid, needed,
-                sim_start=getattr(ncfile, 'SIMULATION_START_DATE', None),
-                accum_ref_dir=accum_ref_dir)
-            print(f"  {needed} referred to 00Z from {src}")
-
-    def since_00z(name):
-        """Native accumulated field, referred to 00Z of the same day."""
-        return np.asarray(ncfile.variables[name][0], dtype=float) - accum_00z[name]
+    accum_hour = {}
+    if accum_keys:
+        print("\n=== ACCUMULATED FIELDS: THE HOUR ENDING AT THIS TIMESTEP ===")
+        curr, prev = accum_hourly.window(valid.to_pydatetime())
+        accum_hour = accum_hourly.published(accum_hourly.increments(input_file, accum_snap_dir))
+        print(f"  {curr.valid:%Y-%m-%dT%H} minus {prev.valid:%Y-%m-%dT%H}, run {curr.run:%Y%m%d%H}")
+        if accum_snap_dir:
+            # The next hour is differenced against this file's own state -- at 00Z
+            # too, where that state is not `curr`. The driver snapshots every
+            # fetched file already; this covers a conversion run by hand, and lets
+            # the convert scripts refuse to delete a wrfout whose state is unsaved.
+            own = accum_hourly.state_of(input_file)
+            if not os.path.isfile(accum_hourly.snapshot_path(accum_snap_dir, own)):
+                accum_hourly.write_snapshot(input_file, accum_snap_dir)
 
     # WRF's Q* are mixing ratios, per kg of DRY air; every ECMWF water content
     # (q, clwc, ciwc, crwc, cswc, and the column integrals) is a SPECIFIC
@@ -551,23 +500,9 @@ def main(input_file, output_file, debug_vars=None, accum_ref_dir=None,
                 continue
 
             if info.get('stepType') == 'accum':
-                values = since_00z(key)
-                if key == 'SNOWNC':
-                    # See ACCUM_DEPS: paramId 144 is all solid precipitation.
-                    # HAILNC is not added -- WSM6 has no hail category and the
-                    # field is identically zero wherever it has been measured.
-                    # With this, tp = sf + tirf closes exactly, since tirf
-                    # already subtracts the graupel.
-                    values = values + since_00z('GRAUPELNC')
-                low = np.nanmin(values)
-                if low < 0:
-                    # A GRIB-sourced reference carries ~1e-8 of packing noise;
-                    # clip only that, so a real negative stays visible.
-                    if low < -1e-3:
-                        print(f"  WARNING: {key} minus 00Z reaches {low:.3e}")
-                    values = np.where(values < 0, 0.0, values)
-            else:
-                values = np.asarray(gv(key).values, dtype=float)
+                emit(key, accum_hour[key], "(hour ending now)")   # already in GRIB units
+                continue
+            values = np.asarray(gv(key).values, dtype=float)
 
             if key == 'VAR_SSO':
                 values = np.sqrt(values)          # variance -> standard deviation
@@ -822,30 +757,11 @@ def main(input_file, output_file, debug_vars=None, accum_ref_dir=None,
         except Exception as exc:
             print(f"  soil layers: FAILED: {exc}")
 
-    if want('tirf'):
-        try:
-            rain = since_00z('RAINNC') - since_00z('SNOWNC') - since_00z('GRAUPELNC')
-            emit('tirf', np.where(rain < 0, 0.0, rain), "(rain only, mm)")
-        except Exception as exc:
-            print(f"  tirf: FAILED: {exc}")
-
-    if want('ro'):
-        try:
-            # Both are monotone, so the clip only guards against reference noise.
-            total = since_00z('SFROFF') + since_00z('UDROFF')
-            emit('ro', np.where(total < 0, 0.0, total) * 1e-3, "(surface + sub-surface)")
-        except Exception as exc:
-            print(f"  ro: FAILED: {exc}")
-
-    # Net radiation: downward minus upward, all in J/m^2 already.
-    for key, (down, up) in NET_RADIATION.items():
-        if not want(key):
-            continue
-        try:
-            net = -since_00z(up) if down is None else since_00z(down) - since_00z(up)
-            emit(key, net, f"(net, {down or '0'} - {up})")
-        except Exception as exc:
-            print(f"  {key}: FAILED: {exc}")
+    # Accumulated fields with no native variable of their own: tirf, ro and the
+    # net radiation, from accum_hourly.published like the rest.
+    for key in accum_keys:
+        if key not in ncfile.variables:
+            emit(key, accum_hour[key], "(hour ending now)")
 
     if want('mucape') or want('mucin'):
         try:
@@ -1033,5 +949,5 @@ def main(input_file, output_file, debug_vars=None, accum_ref_dir=None,
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.input, args.output, args.debug_vars, args.accum_ref_dir,
+    main(args.input, args.output, args.debug_vars, args.accum_snap_dir,
          args.static_ref_dir)

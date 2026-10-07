@@ -33,11 +33,17 @@
 # is why it lives here now (issue #32).
 #      wrapped in `timeout` (cuts tape-recall hangs) with a few retries
 #   3. checks the file is a readable NetCDF (catches tape stubs / truncation)
-#   3b. (convert mode, hour != 00) makes sure the day's 00Z reference sidecar exists
-#      (accum_ref.py; tp is referred to 00Z of the same day), fetching the 00Z wrfout
-#      first if needed -- in backward order 00Z would otherwise arrive last
-#   4. submits a convert_step.sh job (dcgp_usr_prod) for that timestep (async)
-#      -- UNLESS DOWNLOAD_ONLY=1, in which case it stops at step 3 and KEEPS the
+#   3b. snapshots the 19 accumulators of the file (accum_hourly.py), and for 00Z
+#      also of the 24 h file of the run for the previous day -- the only file
+#      that holds the hour 23Z -> 00Z (#70, #71). Every accumulation is the hour
+#      ending at its timestep, differenced against the state before it.
+#   4. submits the convert_step.sh job (dcgp_usr_prod) of every hour that is now
+#      READY: its own wrfout is local and the snapshots of its hour exist. That is
+#      this timestep in forward order, the one after it in backward order, so
+#      each worker tries both, and whichever of the two events comes second
+#      submits (under a lock). The state before the window's oldest hour is
+#      fetched once the window is done; an hour still not ready then is logged.
+#      -- UNLESS DOWNLOAD_ONLY=1, in which case it stops at step 3b and KEEPS the
 #      wrfout (convert_step.sh deletes it on success), for staging raw files.
 # Every outcome is appended to STATUS_LOG (single writer = this driver chain).
 # Missing / on-tape / unreadable files are logged and SKIPPED, never fatal.
@@ -49,7 +55,7 @@
 #   DRIVER_MAX_SECONDS             - wall-time budget per process before re-spawning
 #   FETCH_PARALLEL                 - concurrent sftp transfers
 #   FETCH_TIMEOUT, FETCH_RETRIES   - per-sftp timeout (s) and retry count
-#   WRFOUT_DIR, GRIB_DIR, GRIB_TEMPLATE, PROJECT_DIR, ACCUM_REF_DIR, STATIC_REF_DIR
+#   WRFOUT_DIR, GRIB_DIR, GRIB_TEMPLATE, PROJECT_DIR, ACCUM_SNAP_DIR, STATIC_REF_DIR
 #   DATAMOVER_HOST, REMOTE_HOST, IDENTITY_FILE, SFTP_OPTS, BASE_2023, BASE_PRE2023, INIT_HOUR
 #   LOG_DIR, STATUS_LOG, DRIVER_LOG, DRIVER_SCRIPT, CONVERT_SCRIPT
 #   CONVERT_PARTITION, CONVERT_WALLTIME, CONVERT_MEM, CONVERT_ACCOUNT
@@ -78,12 +84,17 @@ BATCH_SIZE="${BATCH_SIZE:-24}"
 DRIVER_MAX_SECONDS="${DRIVER_MAX_SECONDS:-1080}"
 FETCH_TIMEOUT="${FETCH_TIMEOUT:-600}"
 FETCH_RETRIES="${FETCH_RETRIES:-2}"
-ACCUM_REF_DIR="${ACCUM_REF_DIR:-$(dirname "${GRIB_DIR%/}")/accum_ref}"
+ACCUM_SNAP_DIR="${ACCUM_SNAP_DIR:-$(dirname "${GRIB_DIR%/}")/accum_snap}"
+# The 24 h files land here, never in WRFOUT_DIR: one is named like the next day's
+# 00Z, and would be taken for it.
+DAYEND_DIR="${DAYEND_DIR:-${WRFOUT_DIR%/}_dayend}"
 STATIC_REF_DIR="${STATIC_REF_DIR:-$(dirname "${GRIB_DIR%/}")/static_v1}"
 IDENTITY_FILE="${IDENTITY_FILE:-}"
 SFTP_OPTS="${SFTP_OPTS:--B 262144 -R 256 -p}"
 STATUS_LOG="${STATUS_LOG:-${LOG_DIR}/step_pipeline_status.log}"
 DRIVER_LOG="${DRIVER_LOG:-${LOG_DIR}/fetch_step_driver.log}"
+# One job-id marker (and its lock) per submitted hour, beside this chain's ledger.
+SUBMIT_MARKS="${STATUS_LOG%.log}.submitted"
 SKIP_LIST="${SKIP_LIST:-}"
 # Login nodes cannot ssh/pkill one another, so a flag file on the shared FS is the
 # only way to stop a driver chain from a different login node than it runs on.
@@ -178,7 +189,7 @@ submit_convert() {
     local d="$1" h="$2" dcompact local_dir convert_env
     dcompact="${d//-/}"
     local_dir="${WRFOUT_DIR}/${d}"
-    convert_env="TARGET_DATE=${d},HOUR=${h},WRFOUT_DIR=${local_dir},GRIB_DIR=${GRIB_DIR},PROJECT_DIR=${PROJECT_DIR},GRIB_TEMPLATE=${GRIB_TEMPLATE},ACCUM_REF_DIR=${ACCUM_REF_DIR},STATIC_REF_DIR=${STATIC_REF_DIR},KEEP_WRFOUT=${KEEP_WRFOUT}"
+    convert_env="TARGET_DATE=${d},HOUR=${h},WRFOUT_DIR=${local_dir},GRIB_DIR=${GRIB_DIR},PROJECT_DIR=${PROJECT_DIR},GRIB_TEMPLATE=${GRIB_TEMPLATE},ACCUM_SNAP_DIR=${ACCUM_SNAP_DIR},STATIC_REF_DIR=${STATIC_REF_DIR},KEEP_WRFOUT=${KEEP_WRFOUT}"
 
     local acct_args=()
     [ -n "${CONVERT_ACCOUNT:-}" ] && acct_args=(--account "${CONVERT_ACCOUNT}")
@@ -202,12 +213,14 @@ submit_convert() {
 
 # Fetch one timestep via the datamover (unless already local) and validate it.
 # Failures are logged in STATUS_LOG with a grep-able tag; returns 1 on failure.
+#   $3 = remote path, $4 = local directory: optional, for a file that is not one of
+#   the archive's timesteps (the 24 h file of a run, see ensure_dayend).
 fetch_wrfout() {
     local d="$1" h="$2"
     local dt="${d}T${h}"
     local local_dir remote fname dest
-    local_dir="${WRFOUT_DIR}/${d}"
-    remote="$(remote_path "$d" "$h")"
+    local_dir="${4:-${WRFOUT_DIR}/${d}}"
+    remote="${3:-$(remote_path "$d" "$h")}"
     fname="wrfout_d02_${d}_${h}:00:00"
     dest="${local_dir}/${fname}"
     mkdir -p "$local_dir"
@@ -285,77 +298,188 @@ fetch_wrfout() {
     fi
 }
 
-# Path of the day's 00Z reference sidecar (see accum_ref.py).
-ref_sidecar() {
-    local d="$1"
-    echo "${ACCUM_REF_DIR}/${d:0:4}/${d:5:2}/accum_ref_${d//-/}.npz"
+# ---- hourly accumulations (accum_hourly.py, #71) ---------------------------
+# Run init "YYYYMMDDHH" of the run whose 24 files make up day $1.
+run_for_day() { echo "$(TZ=UTC date -d "$1 -1 day" +%Y%m%d)${INIT_HOUR}"; }
+day_shift() { TZ=UTC date -d "$1 $2 day" +%Y-%m-%d; }
+epoch_of() { TZ=UTC date -d "$1 $((10#$2)):00:00" +%s; }
+raw_path() { echo "${WRFOUT_DIR}/$1/wrfout_d02_$1_$2:00:00"; }
+raw_ok() { [ -f "$1" ] && [ "$(stat -c%s "$1" 2>/dev/null || echo 0)" -ge "$MIN_BYTES" ]; }
+
+# Snapshot path of the state (valid day $1, hour $2) of run $3 -- the layout of
+# accum_hourly.snapshot_path.
+snap_path() { echo "${ACCUM_SNAP_DIR}/${1:0:4}/${1:5:2}/accum_${1//-/}$2_run$3.npz"; }
+
+# The snapshots the hour ending at (day $1, hour $2) is differenced from, one per
+# line (accum_hourly.window): the state before it in the run for its day, or for
+# 00Z the 24 h file and the 23Z of the run for the day before.
+window_snaps() {
+    local d="$1" h="$2" p
+    if [ "$h" = "00" ]; then
+        p=$(day_shift "$d" -1)
+        snap_path "$d" 00 "$(run_for_day "$p")"
+        snap_path "$p" 23 "$(run_for_day "$p")"
+    else
+        snap_path "$d" "$(printf %02d $((10#$h - 1)))" "$(run_for_day "$d")"
+    fi
 }
 
-# Make sure the day's 00Z reference sidecar exists before converting a non-00Z hour:
-# every convert refers accumulated fields (tp) to 00Z of the same day. Runs in the
-# FOREGROUND of the main loop, so parallel workers never fetch the 00Z twice.
-#   sidecar present              -> ok
-#   00Z wrfout local             -> extract the sidecar from it
-#   otherwise                    -> fetch the 00Z wrfout, extract; if its GRIB already
-#                                   exists the wrfout was needed only as reference and is
-#                                   removed, else it stays for the 00Z convert to use.
-# Returns 1 (logged REF_UNAVAILABLE) when the reference cannot be obtained.
-ensure_ref() {
-    local d="$1" h="$2"
-    local ref w00 fetched=0
-    ref="$(ref_sidecar "$d")"
-    [ -s "$ref" ] && return 0
-    w00="${WRFOUT_DIR}/${d}/wrfout_d02_${d}_00:00:00"
-    if [ "${DRY_RUN}" = "1" ]; then
-        echo "  [DRY] ensure 00Z reference ${ref} (from ${w00}, fetching it if absent)"
-        return 0
-    fi
-    if [ -n "${SKIP_SET[${d}T00]:-}" ]; then
-        log_status "${d}T${h}" "REF_UNAVAILABLE" "00Z of ${d} is on the skip-list; recall it, then re-run"
+# Snapshot one local wrfout. Its own python process (~11 s CPU on a login node).
+make_snapshot() {
+    local file="$1" key="$2" out
+    if [ "${DRY_RUN}" = "1" ]; then echo "  [DRY] snapshot ${file}"; return 0; fi
+    if ! out=$(cd "$PROJECT_DIR" && uv run python accum_hourly.py snapshot "$file" "$ACCUM_SNAP_DIR" 2>&1); then
+        log_status "$key" "SNAPSHOT_FAILED" "$(printf '%s' "$out" | tail -n 1 | cut -c1-200)"
         return 1
     fi
-    if ! { [ -f "$w00" ] && [ "$(stat -c%s "$w00" 2>/dev/null || echo 0)" -ge "$MIN_BYTES" ]; }; then
-        echo "  [${d}T${h}] 00Z reference missing: fetching ${d}T00 first."
-        if ! fetch_wrfout "$d" "00"; then
-            log_status "${d}T${h}" "REF_UNAVAILABLE" "could not fetch the 00Z wrfout of ${d} (see its ledger entry)"
-            return 1
+}
+
+# Snapshot of the archived state (day $1, hour $2), from its local wrfout.
+ensure_archive_snapshot() {
+    local d="$1" h="$2" raw
+    [ -s "$(snap_path "$d" "$h" "$(run_for_day "$d")")" ] && return 0
+    raw=$(raw_path "$d" "$h")
+    [ -f "$raw" ] || return 1
+    make_snapshot "$raw" "${d}T${h}"
+}
+
+# Snapshot of the 24 h file of the run for the day before $1, i.e. the state at
+# 00Z of $1 that closes the previous day: fetched into DAYEND_DIR, snapshotted,
+# deleted. The relay base follows the run's target day, as remote_path does.
+ensure_dayend() {
+    local d="$1" p run snap dir base
+    p=$(day_shift "$d" -1)
+    run=$(run_for_day "$p")
+    snap=$(snap_path "$d" 00 "$run")
+    [ -s "$snap" ] && return 0
+    dir="${DAYEND_DIR}/${run}"
+    mkdir -p "$dir"
+    if [ "${p:0:4}" -ge 2023 ]; then base="${BASE_2023}"; else base="${BASE_PRE2023}"; fi
+    if ! fetch_wrfout "$d" "00" "${base}/${run}/wrfout_d02_${d}_00:00:00" "$dir"; then
+        log_status "${d}T00" "DAYEND_UNAVAILABLE" "24 h file of run ${run}: the hour 23Z->00Z of ${p} cannot be computed (see the fetch entry above)"
+        return 1
+    fi
+    make_snapshot "${dir}/wrfout_d02_${d}_00:00:00" "${d}T00" || return 1
+    [ "${DRY_RUN}" = "1" ] || timeout 60 rm -f "${dir}/wrfout_d02_${d}_00:00:00" 2>/dev/null || true
+}
+
+# Submit the convert of (day $1, hour $2) if it is READY: in the window, no GRIB
+# yet, its wrfout local, the snapshots of its hour present. Called both by the
+# worker that fetched it and by the one that fetched the state before it; the
+# lock and the job-id marker keep the two from submitting it twice. A marker
+# whose job has left the queue without a GRIB is a failed convert: resubmitted.
+submit_if_ready() {
+    local d="$1" h="$2" dt="$1T$2" s
+    [ "${DOWNLOAD_ONLY}" = "1" ] && return 0
+    within_window "$(epoch_of "$d" "$h")" || return 0
+    [ -f "$(grib_path "$d" "$h")" ] && return 0
+    raw_ok "$(raw_path "$d" "$h")" || return 1
+    for s in $(window_snaps "$d" "$h"); do [ -s "$s" ] || return 1; done
+    if [ "${DRY_RUN}" = "1" ]; then submit_convert "$d" "$h"; return 0; fi
+    mkdir -p "$SUBMIT_MARKS"
+    (
+        flock 9
+        mark="${SUBMIT_MARKS}/${dt}"
+        if [ -s "$mark" ] && timeout 60 squeue -h -j "$(cat "$mark")" 2>/dev/null | grep -q .; then
+            exit 0
         fi
-        fetched=1
-    fi
-    if ! ( cd "$PROJECT_DIR" && uv run python accum_ref.py extract "$w00" "$ACCUM_REF_DIR" ); then
-        log_status "${d}T${h}" "REF_UNAVAILABLE" "accum_ref.py extract failed on ${w00}"
-        return 1
-    fi
-    if [ "$fetched" = "1" ] && [ -f "$(grib_path "$d" "00")" ]; then
-        timeout 60 rm -f "$w00" 2>/dev/null || true
-    fi
-    log_status "${d}T00" "REF_OK" "$ref"
+        [ -f "$(grib_path "$d" "$h")" ] && exit 0
+        jobid=$(submit_convert "$d" "$h")
+        echo "$jobid" > "$mark"
+        echo "  [${dt}] convert submitted (job ${jobid})"
+        log_status "$dt" "CONVERT_SUBMITTED" "job=${jobid}"
+    ) 9>"${SUBMIT_MARKS}/${dt}.lock"
 }
 
-# Fetch one timestep, then submit its convert job. Never aborts the driver.
+# The hour after (day $1, hour $2): the one this state is the previous state of.
+next_hour() { TZ=UTC date -d "@$(( $(epoch_of "$1" "$2") + 3600 ))" '+%Y-%m-%d %H'; }
+
+# Fetch one timestep, snapshot it, then submit whatever became ready. Never aborts
+# the driver.
 process_one() {
     local d="$1" h="$2"
-    local dt="${d}T${h}" size
+    local dt="${d}T${h}" size nd nh
     fetch_wrfout "$d" "$h" || return 1
     if [ "${DRY_RUN}" = "1" ]; then
         log_status "$dt" "FETCH_OK" "(dry-run)"
+        make_snapshot "$(raw_path "$d" "$h")" "$dt"
+        [ "$h" = "00" ] && ensure_dayend "$d"
         if [ "${DOWNLOAD_ONLY}" != "1" ]; then
             submit_convert "$d" "$h"
             log_status "$dt" "CONVERT_SUBMITTED" "(dry-run)"
         fi
         return 0
     fi
-    size=$(stat -c%s "${WRFOUT_DIR}/${d}/wrfout_d02_${d}_${h}:00:00" 2>/dev/null || echo 0)
+    size=$(stat -c%s "$(raw_path "$d" "$h")" 2>/dev/null || echo 0)
 
     log_status "$dt" "FETCH_OK" "size=${size}B"
+    ensure_archive_snapshot "$d" "$h" || true
+    [ "$h" = "00" ] && { ensure_dayend "$d" || true; }
     if [ "${DOWNLOAD_ONLY}" = "1" ]; then
         echo "  [${dt}] fetched (download-only: no convert, wrfout kept)."
         return 0
     fi
-    local jobid
-    jobid=$(submit_convert "$d" "$h")
-    echo "  [${dt}] convert submitted (job ${jobid})"
-    log_status "$dt" "CONVERT_SUBMITTED" "job=${jobid}"
+    submit_if_ready "$d" "$h" || true
+    read -r nd nh <<< "$(next_hour "$d" "$h")"
+    submit_if_ready "$nd" "$nh" || true
+}
+
+# An hour whose GRIB exists is not fetched -- but the hour after it may still need
+# its state. Fetch it for the snapshot alone, then let the next hour go.
+snapshot_only() {
+    local d="$1" h="$2" nd nh raw fetched=0
+    raw=$(raw_path "$d" "$h")
+    if ! [ -f "$raw" ]; then
+        fetch_wrfout "$d" "$h" || return 1
+        fetched=1
+    fi
+    ensure_archive_snapshot "$d" "$h" || return 1
+    if [ "$fetched" = "1" ] && [ "${KEEP_WRFOUT}" != "1" ] && [ "${DOWNLOAD_ONLY}" != "1" ]; then
+        timeout 60 rm -f "$raw" 2>/dev/null || true
+    fi
+    read -r nd nh <<< "$(next_hour "$d" "$h")"
+    submit_if_ready "$nd" "$nh" || true
+}
+
+# Does the hour after (day $1, hour $2) still need this state's snapshot?
+next_needs_snapshot() {
+    local d="$1" h="$2" nd nh
+    [ "${DOWNLOAD_ONLY}" = "1" ] && return 1
+    read -r nd nh <<< "$(next_hour "$d" "$h")"
+    within_window "$(epoch_of "$nd" "$nh")" || return 1
+    [ -f "$(grib_path "$nd" "$nh")" ] && return 1
+    [ -s "$(snap_path "$d" "$h" "$(run_for_day "$d")")" ] && return 1
+    return 0
+}
+
+# Once the window is done: fetch the state before its oldest hour, which no
+# timestep of the window brings, then give every hour still without a GRIB a last
+# chance and log the ones that cannot go, with what they wait for.
+close_window() {
+    local sd sh pd ph e d h dt s missing grc
+    [ "${DOWNLOAD_ONLY}" = "1" ] && return 0
+    [ "${DRY_RUN}" = "1" ] && { echo "  [DRY] close_window: edge state + sweep"; return 0; }
+    sd="${START_DT%T*}"; sh="${START_DT#*T}"
+    read -r pd ph <<< "$(TZ=UTC date -d "@$(( START_EPOCH - 3600 ))" '+%Y-%m-%d %H')"
+    if ! [ -f "$(grib_path "$sd" "$sh")" ] && ! ensure_archive_snapshot "$pd" "$ph"; then
+        echo "  [${pd}T${ph}] state before the window: fetching it for its snapshot."
+        snapshot_only "$pd" "$ph" || true
+    fi
+    [ "$sh" = "00" ] && { ensure_dayend "$sd" || true; }
+    e=$START_EPOCH
+    while [ "$e" -le "$END_EPOCH" ]; do
+        d=$(TZ=UTC date -d "@${e}" +%Y-%m-%d); h=$(TZ=UTC date -d "@${e}" +%H); dt="${d}T${h}"
+        if ! [ -f "$(grib_path "$d" "$h")" ] && raw_ok "$(raw_path "$d" "$h")"; then
+            grc=0; gate_wait "$dt" || grc=$?
+            [ "$grc" -ne 0 ] && { echo "  close_window: stopped at ${dt} (gate rc=${grc})."; return 0; }
+            if ! submit_if_ready "$d" "$h"; then
+                missing=""
+                for s in $(window_snaps "$d" "$h"); do [ -s "$s" ] || missing="${missing} $(basename "$s")"; done
+                log_status "$dt" "CONVERT_BLOCKED" "missing snapshot(s):${missing:- none}"
+            fi
+        fi
+        e=$((e + 3600))
+    done
 }
 
 # Re-spawn this driver detached for the next timestep (fresh login-node clock).
@@ -577,8 +701,17 @@ while [ "$processed" -lt "$BATCH_SIZE" ] && within_window "$CUR_EPOCH"; do
             *)               echo "  [${dt}] GRIB already exists, skipping." ;;
         esac
         log_status "$dt" "$done_tag" ""
-    elif [ "${DOWNLOAD_ONLY}" != "1" ] && [ "$h" != "00" ] && ! ensure_ref "$d" "$h"; then
-        echo "  WARN [${dt}] 00Z reference unavailable, skipping (REF_UNAVAILABLE)."
+        if [ "${DRY_RUN}" != "1" ]; then
+            if [ "$done_tag" = "SKIP_RAW_EXISTS" ]; then
+                # Staged before snapshots existed, or by a chain that was stopped.
+                ensure_archive_snapshot "$d" "$h" || true
+                [ "$h" = "00" ] && { ensure_dayend "$d" || true; }
+            elif next_needs_snapshot "$d" "$h"; then
+                snapshot_only "$d" "$h" &
+                running=$((running + 1))
+                if [ "$running" -ge "$FETCH_PARALLEL" ]; then wait -n || true; running=$((running - 1)); fi
+            fi
+        fi
     elif [ "${DRY_RUN}" = "1" ] || [ "${FETCH_PARALLEL}" -le 1 ]; then
         grc=0; gate_wait "$dt" || grc=$?
         [ "$grc" -eq 2 ] && { budget_hit=1; break; }
@@ -612,5 +745,7 @@ if within_window "$CUR_EPOCH"; then
     respawn "${NEXT_DT}"
 else
     echo ""
-    echo "Window complete (reached ${DIRECTION} edge). No further respawn."
+    echo "Window complete (reached ${DIRECTION} edge). Closing it, then no further respawn."
+    close_window
+    wait || true
 fi
