@@ -86,8 +86,8 @@ QUOTA_STOP_TB=85                 # hold new downloads above this
 SANITY_ACCOUNT=aifpt_ailamit_0
 # Delete each staged wrfout once its GRIB is in place. The schema is closed at 246
 # messages, so there is no longer a reason to keep them, and it is the only way this
-# campaign fits in the quota. convert_step.sh still refuses to delete a 00Z whose
-# accum_ref sidecar is missing.
+# campaign fits in the quota. convert_step.sh still refuses to delete a wrfout whose
+# accumulator snapshot is missing while the next hour needs it (#71).
 KEEP_WRFOUT="${KEEP_WRFOUT:-false}"
 # Restrict the run to these phase labels (space separated). Empty = all.
 PHASES_ONLY="${PHASES_ONLY:-}"
