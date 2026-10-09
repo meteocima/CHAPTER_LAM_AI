@@ -455,11 +455,14 @@ submit_if_ready() {
 # The pending list: one "YYYY-MM-DDTHH" per line, shared by the workers (lock).
 # The first time an hour is put there it is logged CONVERT_WAITING; the submit
 # that eventually lets it go clears that with CONVERT_SUBMITTED.
+#   $2 = "quiet": put it on the list without logging (close_window's sweep, which
+#   also lists hours already submitted and still running -- they are not waiting).
 add_pending() {
     (
         flock 8
         grep -qx "$1" "$PENDING" 2>/dev/null && exit 0
         echo "$1" >> "$PENDING"
+        [ "${2:-}" = "quiet" ] && exit 0
         grep -qx "$1" "${PENDING}.seen" 2>/dev/null && exit 0
         echo "$1" >> "${PENDING}.seen"
         log_status "$1" "CONVERT_WAITING" "local, but its snapshots or the queue are not ready yet"
@@ -577,7 +580,7 @@ close_window() {
     while [ "$e" -le "$END_EPOCH" ]; do
         d=$(TZ=UTC date -d "@${e}" +%Y-%m-%d); h=$(TZ=UTC date -d "@${e}" +%H)
         if ! [ -f "$(grib_path "$d" "$h")" ] && raw_ok "$(raw_path "$d" "$h")"; then
-            add_pending "${d}T${h}"
+            add_pending "${d}T${h}" quiet
         fi
         e=$((e + 3600))
     done
