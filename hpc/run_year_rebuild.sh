@@ -37,6 +37,7 @@
 # and submit one check_grib_sanity job over every month touched.
 #
 # RUN ON A REGULAR LOGIN NODE:  bash hpc/run_year_rebuild.sh
+# Other years, one phase per month:  YEARS="2020 2021 2022 2023" bash hpc/run_year_rebuild.sh
 # It snapshots itself and re-execs detached (setsid), so the terminal / chat can be closed
 # and edits to the repo copy do not touch the running sequence. Re-entrant: re-running
 # skips staged wrfout (download) and existing GRIBs (convert).
@@ -126,6 +127,21 @@ PHASES=(
     "r25_06  2025-06-01 0 2025-06-30 23"
     "r25_07  2025-07-01 0 2025-07-02 23"
 )
+
+# YEARS="2020 2021 ...": replace the table above with one phase per calendar month of
+# those years, labelled r20_01 .. r23_12 -- the shape every 2019/2025 phase already had.
+# Unset, the table above runs as it always did.
+YEARS="${YEARS:-}"
+export YEARS
+if [ -n "$YEARS" ]; then
+    PHASES=()
+    for y in $YEARS; do
+        for m in 01 02 03 04 05 06 07 08 09 10 11 12; do
+            last=$(TZ=UTC date -d "${y}-${m}-01 +1 month -1 day" +%d)
+            PHASES+=("r${y:2:2}_${m} ${y}-${m}-01 0 ${y}-${m}-${last} 23")
+        done
+    done
+fi
 
 # ---- self-detach from a snapshot --------------------------------------------
 if [ -z "${SEQ_DETACHED:-}" ]; then
@@ -336,16 +352,20 @@ for pend in "${CV_PENDING[@]}"; do
         INCOMPLETE=$((INCOMPLETE + 1))
     fi
 done
-for y in 2019 2024 2025; do
+for y in $(printf '%s\n' ${MONTHS//,/ } | cut -c1-4 | sort -u); do
     log "GRIB_COUNT | ${y}: $(find "${W}/grib_v3/${y}" -name '*.grib' 2>/dev/null | wc -l)"
 done
 log "STAGING_LEFT | $(find "${STAGING_DIR}" -name 'wrfout_d02_*' -type f | wc -l) wrfout still in ${STAGING_DIR}, $(used_tb) TB used"
 
-month_args=""
-for m in ${MONTHS//,/ }; do month_args+=" --month ${m}"; done
+# One array task per month: a single job reads ~1 200 files an hour, so 48 months
+# (~35 000 files) would outlast any wall time. Each task checks its own month.
+months_list="${MONTHS//,/ }"
+n_months=$(printf '%s\n' $months_list | wc -l)
+month_args=" --month \$(echo ${months_list} | cut -d' ' -f\$((SLURM_ARRAY_TASK_ID + 1)))"
 jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$SANITY_ACCOUNT" \
-    --nodes 1 --ntasks 1 --cpus-per-task 1 --mem 8G --time 12:00:00 \
-    --job-name "sanity_rebuild" --output "${LOG_DIR}/rebuild_sanity_%j.out" \
+    --nodes 1 --ntasks 1 --cpus-per-task 1 --mem 8G --time 04:00:00 \
+    --array "0-$((n_months - 1))" \
+    --job-name "sanity_rebuild" --output "${LOG_DIR}/rebuild_sanity_%A_%a.out" \
     --wrap "cd ${PROJECT_DIR}
 module load eccodes/2.34.0--gcc--12.2.0 2>/dev/null
 GCC12_RT=/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0/gcc-runtime-12.2.0-dqfwf7yjtbtdzllj66jx6suk34ir2ct3/lib
@@ -353,7 +373,7 @@ ECCODES_LIB=/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0/
 export LD_PRELOAD=\$GCC12_RT/libstdc++.so.6
 export LD_LIBRARY_PATH=\$GCC12_RT:\$ECCODES_LIB:\${LD_LIBRARY_PATH:-}
 ${UV} run python hpc/check_grib_sanity.py${month_args}")
-log "SANITY_SUBMITTED | job ${jid:-FAILED} -> ${LOG_DIR}/rebuild_sanity_${jid}.out"
+log "SANITY_SUBMITTED | array job ${jid:-FAILED} (${n_months} months) -> ${LOG_DIR}/rebuild_sanity_${jid}_<task>.out"
 
 if [ "$INCOMPLETE" -gt 0 ]; then
     log "INCOMPLETE | ${INCOMPLETE} phase(s) ended short; NOT reporting DONE. Re-run this"
