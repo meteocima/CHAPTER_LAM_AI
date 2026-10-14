@@ -24,6 +24,9 @@ TOKEN_KINDS = {
     'SKIP_RAW_EXISTS': CLEAR,
     'SNAPSHOT_OK': CLEAR,
     'REF_OK': CLEAR,
+    # #72: a 00Z whose 24 h file was verified lost on LRZ and listed in
+    # pipeline.missing_00z_days, written with every message missing -- by decision
+    'MISSING_00Z_DECLARED': CLEAR,
 
     # the timestep needs attention: usually a re-run, a recall on LRZ only if it
     # persists across re-runs
@@ -35,10 +38,11 @@ TOKEN_KINDS = {
     'REF_UNAVAILABLE': PROBLEM,
     # #71: every accumulation is the hour ending at its timestep, differenced
     # against a snapshot of the state before it. A fetched file whose snapshot
-    # could not be written, a 24 h file that could not be had for a 00Z, and an
-    # hour whose snapshots are still missing when the window is done.
+    # could not be written, the spin-up 00Z that 01Z is differenced against and
+    # that could not be had (#72), and an hour whose snapshots are still missing
+    # when the window is done.
     'SNAPSHOT_FAILED': PROBLEM,
-    'DAYEND_UNAVAILABLE': PROBLEM,
+    'SPINUP_UNAVAILABLE': PROBLEM,
     'CONVERT_BLOCKED': PROBLEM,
     'SUBMIT_FAILED': PROBLEM,
     # local but waiting for its snapshots or for room in the queue; cleared by the
@@ -58,12 +62,15 @@ TOKEN_KINDS = {
     'TAPE_TIMEOUT': PROBLEM,
     'UNREADABLE_TAPE': PROBLEM,
     'CONVERT_RESUBMITTED': CLEAR,
+    # the 24 h file a 00Z took its accumulations from, until #72 made it the
+    # 00Z's own input: a failure to fetch it is now that timestep's own token
+    'DAYEND_UNAVAILABLE': PROBLEM,
 }
 
 # Of the above, the ones no current driver writes. Named so that the drift test
 # can tell "the driver gained a token" from "the driver lost one".
 HISTORICAL = frozenset({'TAPE_TIMEOUT', 'UNREADABLE_TAPE', 'CONVERT_RESUBMITTED',
-                        'REF_OK', 'REF_UNAVAILABLE'})
+                        'REF_OK', 'REF_UNAVAILABLE', 'DAYEND_UNAVAILABLE'})
 
 Summary = collections.namedtuple('Summary', 'problems chain_events unknown')
 

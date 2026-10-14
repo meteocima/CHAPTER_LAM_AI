@@ -32,8 +32,9 @@ import numpy as np
 from netCDF4 import Dataset
 import wrf
 import pandas as pd
-from eccodes import (codes_grib_new_from_samples, codes_set, codes_set_values,
-                     codes_write, codes_release)
+from eccodes import (codes_get, codes_get_message, codes_get_values,
+                     codes_grib_new_from_file, codes_grib_new_from_samples, codes_release,
+                     codes_set, codes_set_values, codes_write)
 
 from wrf_era5_comparison import WRF_TO_ECMWF_PARAMID, PRESSURE_LEVELS, EXPECTED_MESSAGES
 # Accumulated fields cover the hour ending at the validity time (see accum_hourly.py)
@@ -201,7 +202,9 @@ CLOUD_BANDS = {'lcc': (1.00, 0.80), 'mcc': (0.80, 0.45), 'hcc': (0.45, 0.00)}
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Convert a WRF wrfout to ECMWF-compatible GRIB2")
-    parser.add_argument("--input", required=True, help="Path to wrfout NetCDF file")
+    parser.add_argument("--input", help="Path to wrfout NetCDF file. For 00Z of day D "
+                        "it is the 24 h file of the run for D-1, never the 00Z of the run "
+                        "for D (#72)")
     parser.add_argument("--output", required=True, help="Output GRIB2 file path")
     parser.add_argument(
         "--debug-vars", nargs="*", default=[],
@@ -212,16 +215,26 @@ def parse_args():
              "Required for the static land fields "
              + "/".join(static_ref.STATIC_VARS))
     parser.add_argument(
-        "--missing-00z-as-bitmap", action="store_true",
-        help="At 00Z, publish the accumulations as missing (bitmap) when the 24 h file "
-             "of the previous day's run has no snapshot: ONLY for a file verified lost "
-             "at the source, never for one that has not arrived yet (#71)")
+        "--missing-timestep", metavar="YYYY-MM-DDTHH",
+        help="Write this timestep with every message missing (bitmap), from no input: "
+             "the grid comes from --static-ref-dir. ONLY for a 00Z whose 24 h file was "
+             "verified lost at the source, never for one that has not arrived yet (#72)")
+    parser.add_argument(
+        "--accum-from-grib", metavar="GRIB",
+        help="Copy the accumulated messages byte for byte from this GRIB of the same "
+             "timestep instead of computing them: for re-converting a 00Z whose hourly "
+             "accumulations are right and whose 23Z state is gone (hpc/fix_00z_run.sh)")
     parser.add_argument(
         "--accum-snap-dir", default=None,
         help="Directory of accumulator snapshots (accum_hourly.py): the states each "
              "hour is differenced against. A state with no snapshot is taken from a "
              "wrfout next to --input, or the conversion fails")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if bool(args.input) == bool(args.missing_timestep):
+        parser.error("give exactly one of --input and --missing-timestep")
+    if args.missing_timestep and not args.static_ref_dir:
+        parser.error("--missing-timestep takes its grid from --static-ref-dir")
+    return args
 
 
 # ============================================================================
@@ -309,8 +322,50 @@ def write_message(fout, values, info, level, grid, valid):
 # main
 # ============================================================================
 
+def write_missing_timestep(output_file, valid, static_ref_dir):
+    """Every message of `valid` as missing (bitmap), on the grid of the static
+    sidecar -- which static_ref.assert_grid ties to the wrfout grid. For a 00Z
+    whose 24 h file is verified lost: that timestep has no state at all, and
+    the 00Z of the next run is never a stand-in for it (#72)."""
+    _, meta = static_ref.load_static(static_ref_dir)
+    grid = {k: float(meta[k]) for k in ('lat0', 'lon0', 'lat1', 'lon1', 'truelat1', 'dx', 'dy')}
+    grid['ni'], grid['nj'] = int(meta['ni']), int(meta['nj'])
+    empty = np.full((grid['nj'], grid['ni']), np.nan)
+    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
+    written = 0
+    with open(output_file, 'wb') as fout:
+        for info in WRF_TO_ECMWF_PARAMID.values():
+            for level in info['levels']:
+                write_message(fout, empty, info, level, grid, valid)
+                written += 1
+    print(f"Written {written} messages, all missing, for {valid}")
+    if written != EXPECTED_MESSAGES:
+        sys.exit(f"ERROR: wrote {written} messages, expected {EXPECTED_MESSAGES}")
+
+
+def accumulated_messages(grib_file, valid):
+    """{paramId: (values with NaN where missing, encoded message)} of the
+    accumulated messages of an HOURLY GRIB valid at `valid` (accum_hourly.
+    is_hourly_grib); a file of any other timestep or of the 0-H schema is refused."""
+    if not accum_hourly.is_hourly_grib(grib_file, valid.to_pydatetime()):
+        sys.exit(f"ERROR: {grib_file} does not hold the hourly accumulations of {valid}")
+    found = {}
+    with open(grib_file, 'rb') as fh:
+        while (gid := codes_grib_new_from_file(fh)) is not None:
+            try:
+                if (codes_get(gid, 'productDefinitionTemplateNumber') == 8
+                        and codes_get(gid, 'typeOfStatisticalProcessing') == 1):
+                    values = codes_get_values(gid)
+                    if codes_get(gid, 'bitmapPresent'):
+                        values = np.where(values == codes_get(gid, 'missingValue'), np.nan, values)
+                    found[codes_get(gid, 'paramId')] = (values, codes_get_message(gid))
+            finally:
+                codes_release(gid)
+    return found
+
+
 def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
-         static_ref_dir=None, missing_00z_as_bitmap=False):
+         static_ref_dir=None, accum_from_grib=None):
     debug_vars = debug_vars or []
 
     def want(key):
@@ -435,34 +490,43 @@ def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
 
     # ---------------- accumulated fields: the hour ending now ---------------
     # Outside any try/except: a state that cannot be found must abort the run
-    # rather than let an hour be guessed (#70). For 00Z the input supplies only
-    # the instantaneous fields; its hour comes from the run for the day before.
+    # rather than let an hour be guessed (#70). The input is the current state
+    # of its hour -- at 00Z the 24 h file of the previous day's run (#72) -- and
+    # accum_hourly refuses any other file.
     accum_keys = [k for k, v in WRF_TO_ECMWF_PARAMID.items()
                   if v.get('stepType') == 'accum' and (not debug_vars or k in debug_vars)]
     accum_hour = {}
+    verbatim = {}          # key -> encoded message copied as it is (--accum-from-grib)
     if accum_keys:
         print("\n=== ACCUMULATED FIELDS: THE HOUR ENDING AT THIS TIMESTEP ===")
         curr, prev = accum_hourly.window(valid.to_pydatetime())
-        # By hand with no --accum-snap-dir: states found beside the input are
-        # snapshotted into a throw-away directory, and nothing is kept.
-        snap_dir = accum_snap_dir or tempfile.mkdtemp(prefix='accum_snap_')
-        inc = accum_hourly.increments(input_file, snap_dir, dayend_lost=missing_00z_as_bitmap)
-        if not accum_snap_dir:
-            shutil.rmtree(snap_dir, ignore_errors=True)
-        if inc is None:
-            shape = (len(ncfile.dimensions['south_north']), len(ncfile.dimensions['west_east']))
-            accum_hour = {k: np.full(shape, np.nan) for k in accum_keys}
-            print(f"  24 h file of run {curr.run:%Y%m%d%H} declared lost: the hour is MISSING")
+        if accum_hourly.state_of(input_file) != curr:
+            sys.exit(f"ERROR: {input_file} is not the state of run {curr.run:%Y%m%d%H} "
+                     f"at {valid}" + (": 00Z comes from the previous day's run, its 24 h "
+                                      "file (#72)" if valid.hour == 0 else ""))
+        if accum_from_grib:
+            # Copied, not recomputed: the state before this hour may be long gone.
+            by_param = accumulated_messages(accum_from_grib, valid)
+            for key in accum_keys:
+                values, message = by_param[WRF_TO_ECMWF_PARAMID[key]['paramId']]
+                accum_hour[key] = values.reshape(lat_2d.shape)
+                verbatim[key] = message
+            print(f"  copied from {accum_from_grib}")
         else:
+            # By hand with no --accum-snap-dir: states found beside the input are
+            # snapshotted into a throw-away directory, and nothing is kept.
+            snap_dir = accum_snap_dir or tempfile.mkdtemp(prefix='accum_snap_')
+            inc = accum_hourly.increments(input_file, snap_dir)
+            if not accum_snap_dir:
+                shutil.rmtree(snap_dir, ignore_errors=True)
             accum_hour = accum_hourly.published(inc)
             print(f"  {curr.valid:%Y-%m-%dT%H} minus {prev.valid:%Y-%m-%dT%H}, run {curr.run:%Y%m%d%H}")
         if accum_snap_dir:
-            # The next hour is differenced against this file's own state -- at 00Z
-            # too, where that state is not `curr`. The driver snapshots every
-            # fetched file already; this covers a conversion run by hand, and lets
-            # the convert scripts refuse to delete a wrfout whose state is unsaved.
-            own = accum_hourly.state_of(input_file)
-            if not os.path.isfile(accum_hourly.snapshot_path(accum_snap_dir, own)):
+            # The next hour is differenced against this file's own state. The
+            # driver snapshots every fetched file already; this covers a
+            # conversion run by hand, and lets the convert scripts refuse to
+            # delete a wrfout whose state is unsaved.
+            if not os.path.isfile(accum_hourly.snapshot_path(accum_snap_dir, curr)):
                 accum_hourly.write_snapshot(input_file, accum_snap_dir)
 
     # WRF's Q* are mixing ratios, per kg of DRY air; every ECMWF water content
@@ -951,6 +1015,10 @@ def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
     with open(output_file, 'wb') as fout:
         for key, data in out.items():
             info = WRF_TO_ECMWF_PARAMID[key]
+            if key in verbatim:
+                fout.write(verbatim[key])
+                written += 1
+                continue
             data = np.asarray(data)
             for idx, level in enumerate(info['levels']):
                 field = data[idx] if data.ndim == 3 else data
@@ -967,5 +1035,9 @@ def main(input_file, output_file, debug_vars=None, accum_snap_dir=None,
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.input, args.output, args.debug_vars, args.accum_snap_dir,
-         args.static_ref_dir, args.missing_00z_as_bitmap)
+    if args.missing_timestep:
+        write_missing_timestep(args.output, pd.Timestamp(args.missing_timestep),
+                               args.static_ref_dir)
+    else:
+        main(args.input, args.output, args.debug_vars, args.accum_snap_dir,
+             args.static_ref_dir, args.accum_from_grib)

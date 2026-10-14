@@ -37,10 +37,10 @@ pipeline:
   # Convert but KEEP the input wrfout (convert_step.sh skips its rm). Used to convert
   # staged files that must stay on disk. Snapshots are still released (accum_hourly.release).
   keep_wrfout: false
-  # Days (YYYY-MM-DD) whose 00Z hour -- 23Z->00Z of the day before, from the 24 h file
-  # of that day's run -- was VERIFIED lost at the source on LRZ: their 00Z is converted
-  # with the 19 accumulations missing (bitmap) instead of waiting for the file. A list
-  # of days, never a switch: a file that has not arrived yet is not lost (#71).
+  # Days (YYYY-MM-DD) whose 00Z -- the 24 h file of the run for the day before, which
+  # is the whole 00Z timestep (#72) -- was VERIFIED lost at the source on LRZ: their 00Z
+  # is written with every message missing (bitmap) instead of waiting for the file. A
+  # list of days, never a switch: a file that has not arrived yet is not lost.
   missing_00z_days: []
 
 # Paths on Leonardo

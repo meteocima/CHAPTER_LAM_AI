@@ -33,10 +33,13 @@
 # is why it lives here now (issue #32).
 #      wrapped in `timeout` (cuts tape-recall hangs) with a few retries
 #   3. checks the file is a readable NetCDF (catches tape stubs / truncation)
-#   3b. snapshots the 19 accumulators of the file (accum_hourly.py), and for 00Z
-#      also of the 24 h file of the run for the previous day -- the only file
-#      that holds the hour 23Z -> 00Z (#70, #71). Every accumulation is the hour
-#      ending at its timestep, differenced against the state before it.
+#   3b. snapshots the 19 accumulators of the file (accum_hourly.py). Every
+#      accumulation is the hour ending at its timestep, differenced against the
+#      state before it (#70, #71). 00Z of day D is the 24 h file of the run for
+#      D-1, fetched from that run's folder: the whole timestep comes from it, and
+#      the 00Z of the run for D, 6 h into its spin-up, is never converted (#72).
+#      That file is fetched with 01Z, for its snapshot alone: it is the state
+#      before 01Z.
 #   4. submits the convert_step.sh job (dcgp_usr_prod) of every hour that is now
 #      READY: its own wrfout is local and the snapshots of its hour exist. That is
 #      this timestep in forward order, the one after it in backward order, so
@@ -85,9 +88,10 @@ DRIVER_MAX_SECONDS="${DRIVER_MAX_SECONDS:-1080}"
 FETCH_TIMEOUT="${FETCH_TIMEOUT:-600}"
 FETCH_RETRIES="${FETCH_RETRIES:-2}"
 ACCUM_SNAP_DIR="${ACCUM_SNAP_DIR:-$(dirname "${GRIB_DIR%/}")/accum_snap}"
-# The 24 h files land here, never in WRFOUT_DIR: one is named like the next day's
-# 00Z, and would be taken for it.
-DAYEND_DIR="${DAYEND_DIR:-${WRFOUT_DIR%/}_dayend}"
+# The 00Z of each run, 6 h into its spin-up, lands here and never in WRFOUT_DIR:
+# it is named like the archived 00Z (the 24 h file of the run before, #72) and
+# would be taken for it.
+SPINUP_DIR="${SPINUP_DIR:-${WRFOUT_DIR%/}_spinup}"
 STATIC_REF_DIR="${STATIC_REF_DIR:-$(dirname "${GRIB_DIR%/}")/static_v1}"
 IDENTITY_FILE="${IDENTITY_FILE:-}"
 SFTP_OPTS="${SFTP_OPTS:--B 262144 -R 256 -p}"
@@ -97,10 +101,10 @@ DRIVER_LOG="${DRIVER_LOG:-${LOG_DIR}/fetch_step_driver.log}"
 # and the hours waiting for a snapshot or for room in the queue (#71).
 SUBMIT_MARKS="${STATUS_LOG%.log}.submitted"
 PENDING="${STATUS_LOG%.log}.pending"
-# Days whose 00Z hour (23Z -> 00Z of the day before) was verified LOST at the source
-# on LRZ, space-separated YYYY-MM-DD: their 00Z is converted with the accumulations
-# missing instead of waiting for the 24 h file (#71). A list of days and not a switch,
-# so that a file merely late is never published missing. Empty by default.
+# Days whose 00Z -- the 24 h file of the run for the day before -- was verified LOST
+# at the source on LRZ, space-separated YYYY-MM-DD: their 00Z is written with every
+# message missing instead of waiting for that file (#72). A list of days and not a
+# switch, so that a file merely late is never published missing. Empty by default.
 MISSING_00Z_DAYS="${MISSING_00Z_DAYS:-}"; export MISSING_00Z_DAYS
 # Set on the respawns that only drain the pending list past the window edge.
 CLOSING="${CLOSING:-0}"
@@ -148,14 +152,15 @@ fetch_cmd() {
     echo "sftp ${id_arg} ${SFTP_OPTS} ${REMOTE_HOST}:$1 $2/"
 }
 
-# Remote wrfout path on the relay for a given target date/hour.
+# Remote wrfout path on the relay of the archived state (date $1, hour $2): in the
+# folder of the run for its day, or for 00Z of the run for the day before (#72).
+# The relay base follows the run's target day.
 remote_path() {
-    local d="$1" h="$2" year init base
-    year="${d:0:4}"
-    init="$(TZ=UTC date -d "${d} -1 day" +%Y%m%d)${INIT_HOUR}"
-    if [ "$year" -ge 2023 ]; then base="${BASE_2023}"; else base="${BASE_PRE2023}"; fi
-    echo "${base}/${init}/wrfout_d02_${d}_${h}:00:00"
+    local d="$1" h="$2" rd
+    rd="$d"; [ "$h" = "00" ] && rd=$(TZ=UTC date -d "$d -1 day" +%Y-%m-%d)
+    echo "$(relay_base "$rd")/$(archive_run "$d" "$h")/wrfout_d02_${d}_${h}:00:00"
 }
+relay_base() { if [ "${1:0:4}" -ge 2023 ]; then echo "${BASE_2023}"; else echo "${BASE_PRE2023}"; fi; }
 
 # Expanded output GRIB path for a given target date/hour (under a YYYY/MM tree).
 grib_path() {
@@ -178,6 +183,8 @@ already_done() {
     local d="$1" h="$2" raw
     if [ "${DOWNLOAD_ONLY}" = "1" ]; then
         raw="${WRFOUT_DIR}/${d}/wrfout_d02_${d}_${h}:00:00"
+        # A 00Z staged before #72 is the spin-up one, not the archived state.
+        [ "$h" = "00" ] && evict_spinup_00z "$d"
         if [ -f "$raw" ] && [ "$(stat -c%s "$raw" 2>/dev/null || echo 0)" -ge "$MIN_BYTES" ]; then
             echo "SKIP_RAW_EXISTS"; return 0
         fi
@@ -199,7 +206,7 @@ submit_convert() {
     local d="$1" h="$2" dcompact local_dir convert_env
     dcompact="${d//-/}"
     local_dir="${WRFOUT_DIR}/${d}"
-    convert_env="TARGET_DATE=${d},HOUR=${h},WRFOUT_DIR=${local_dir},GRIB_DIR=${GRIB_DIR},PROJECT_DIR=${PROJECT_DIR},GRIB_TEMPLATE=${GRIB_TEMPLATE},ACCUM_SNAP_DIR=${ACCUM_SNAP_DIR},STATIC_REF_DIR=${STATIC_REF_DIR},KEEP_WRFOUT=${KEEP_WRFOUT},MISSING_00Z_AS_BITMAP=$(lost_00z "$d" "$h" && echo 1 || true)"
+    convert_env="TARGET_DATE=${d},HOUR=${h},WRFOUT_DIR=${local_dir},GRIB_DIR=${GRIB_DIR},PROJECT_DIR=${PROJECT_DIR},GRIB_TEMPLATE=${GRIB_TEMPLATE},ACCUM_SNAP_DIR=${ACCUM_SNAP_DIR},STATIC_REF_DIR=${STATIC_REF_DIR},KEEP_WRFOUT=${KEEP_WRFOUT},MISSING_TIMESTEP=$(lost_00z "$d" "$h" && echo 1 || true)"
 
     local acct_args=()
     [ -n "${CONVERT_ACCOUNT:-}" ] && acct_args=(--account "${CONVERT_ACCOUNT}")
@@ -224,7 +231,7 @@ submit_convert() {
 # Fetch one timestep via the datamover (unless already local) and validate it.
 # Failures are logged in STATUS_LOG with a grep-able tag; returns 1 on failure.
 #   $3 = remote path, $4 = local directory: optional, for a file that is not one of
-#   the archive's timesteps (the 24 h file of a run, see ensure_dayend); $5 =
+#   the archive's timesteps (the spin-up 00Z of a run, see ensure_spinup); $5 =
 #   "quiet" leaves the ledger to the caller, so such a file's failure is not
 #   recorded against the archived timestep that shares its name.
 fetch_wrfout() {
@@ -326,20 +333,27 @@ epoch_of() { TZ=UTC date -d "$1 $((10#$2)):00:00" +%s; }
 # accum_hourly.snapshot_path.
 snap_path() { echo "${ACCUM_SNAP_DIR}/${1:0:4}/${1:5:2}/accum_${1//-/}$2_run$3.npz"; }
 
+# Run init of the state the archived file of (day $1, hour $2) holds: the run for
+# its day, or for 00Z the run for the day before (#72).
+archive_run() { if [ "$2" = "00" ]; then run_for_day "$(day_shift "$1" -1)"; else run_for_day "$1"; fi; }
+
 # Snapshot of the state the archived file of (day $1, hour $2) holds.
-own_snap() { snap_path "$1" "$2" "$(run_for_day "$1")"; }
+own_snap() { snap_path "$1" "$2" "$(archive_run "$1" "$2")"; }
+
+# Snapshot of the 00Z of the run for day $1, 6 h into its spin-up: the state
+# before 01Z, never archived.
+spinup_snap() { snap_path "$1" 00 "$(run_for_day "$1")"; }
 
 # Is (day $1, hour $2) a 00Z whose hour was verified lost (MISSING_00Z_DAYS)?
 lost_00z() { [ "$2" = "00" ] && [[ " ${MISSING_00Z_DAYS} " == *" $1 "* ]]; }
 
-# The snapshots the hour ending at (day $1, hour $2) is differenced from, one per
-# line (accum_hourly.window): the state before it in the run for its day, or for
-# 00Z the 24 h file and the 23Z of the run for the day before.
+# The snapshot the hour ending at (day $1, hour $2) is differenced from
+# (accum_hourly.consumed): the state before it, in the run its own state is from.
+# For 01Z that is the spin-up 00Z, for 00Z the 23Z of the day before.
 window_snaps() {
     local d="$1" h="$2" p
     if [ "$h" = "00" ]; then
         p=$(day_shift "$d" -1)
-        snap_path "$d" 00 "$(run_for_day "$p")"
         snap_path "$p" 23 "$(run_for_day "$p")"
     else
         snap_path "$d" "$(printf %02d $((10#$h - 1)))" "$(run_for_day "$d")"
@@ -370,24 +384,36 @@ ensure_archive_snapshot() {
     make_snapshot "$raw" "${d}T${h}" archived
 }
 
-# Snapshot of the 24 h file of the run for the day before $1, i.e. the state at
-# 00Z of $1 that closes the previous day: fetched into DAYEND_DIR, snapshotted,
-# deleted. The relay base follows the run's target day, as remote_path does.
-ensure_dayend() {
-    local d="$1" p run snap dir base
-    p=$(day_shift "$d" -1)
-    run=$(run_for_day "$p")
-    snap=$(snap_path "$d" 00 "$run")
-    [ -s "$snap" ] && return 0
-    dir="${DAYEND_DIR}/${run}"
+# Snapshot of the 00Z of the run for day $1, 6 h into its spin-up: the state the
+# hour 00Z -> 01Z of $1 is differenced against, and nothing else (#72). Fetched
+# into SPINUP_DIR, snapshotted, deleted; logged against 01Z, the hour it serves.
+ensure_spinup() {
+    local d="$1" run dir name
+    run=$(run_for_day "$d")
+    [ -s "$(spinup_snap "$d")" ] && return 0
+    dir="${SPINUP_DIR}/${run}"; name="wrfout_d02_${d}_00:00:00"
     [ "${DRY_RUN}" = "1" ] || mkdir -p "$dir"
-    if [ "${p:0:4}" -ge 2023 ]; then base="${BASE_2023}"; else base="${BASE_PRE2023}"; fi
-    if ! fetch_wrfout "$d" "00" "${base}/${run}/wrfout_d02_${d}_00:00:00" "$dir" quiet; then
-        log_status "${d}T00" "DAYEND_UNAVAILABLE" "24 h file of run ${run} not fetched (missing, empty or timed out; see the driver log): the hour 23Z->00Z of ${p} cannot be computed. Verify on LRZ; if lost, list the day in pipeline.missing_00z_days and re-run"
+    if ! fetch_wrfout "$d" "00" "$(relay_base "$d")/${run}/${name}" "$dir" quiet; then
+        log_status "${d}T01" "SPINUP_UNAVAILABLE" "00Z of run ${run} not fetched (missing, empty or timed out; see the driver log): the hour 00Z->01Z of ${d} cannot be computed. Re-run; verify on LRZ if it persists"
         return 1
     fi
-    make_snapshot "${dir}/wrfout_d02_${d}_00:00:00" "${d}T00" || return 1
-    [ "${DRY_RUN}" = "1" ] || timeout 60 rm -f "${dir}/wrfout_d02_${d}_00:00:00" 2>/dev/null || true
+    make_snapshot "${dir}/${name}" "${d}T01" || return 1
+    [ "${DRY_RUN}" = "1" ] || timeout 60 rm -f "${dir}/${name}" 2>/dev/null || true
+}
+
+# A local 00Z that is not the archived state -- the spin-up 00Z of the run for its
+# day, staged before #72 -- is moved where ensure_spinup looks for it, so it serves
+# its one purpose (the state before 01Z) and the 24 h file is fetched in its place.
+evict_spinup_00z() {
+    local d="$1" raw state dir
+    raw=$(raw_path "$d" 00)
+    [ -f "$raw" ] && [ "${DRY_RUN}" != "1" ] || return 0
+    state=$(cd "$PROJECT_DIR" && uv run python accum_hourly.py state "$raw" 2>/dev/null) || return 0
+    [ "${state#* }" = "$(archive_run "$d" 00)" ] && return 0
+    dir="${SPINUP_DIR}/${state#* }"
+    mkdir -p "$dir"
+    echo "  [${d}T00] local 00Z is from run ${state#* } (spin-up): moved to ${dir}"
+    timeout 60 mv -f "$raw" "$dir/" 2>/dev/null || timeout 60 rm -f "$raw" 2>/dev/null || true
 }
 
 # Submit the convert of (day $1, hour $2) if it is READY: in the window, no GRIB
@@ -403,16 +429,17 @@ submit_if_ready() {
     [ "${DOWNLOAD_ONLY}" = "1" ] && return 0
     within_window "$(epoch_of "$d" "$h")" || return 0
     [ -f "$(grib_path "$d" "$h")" ] && return 0
-    raw_ok "$(raw_path "$d" "$h")" || return 1
-    if [ "${DRY_RUN}" = "1" ]; then submit_convert "$d" "$h"; return 0; fi
-    [ -s "$(own_snap "$d" "$h")" ] || rc=1
-    for s in $(window_snaps "$d" "$h"); do
-        [ -s "$s" ] && continue
-        # A 24 h file verified lost: the convert publishes the hour missing. The
-        # 23Z state is still awaited (accum_hourly.increments does the same).
-        lost_00z "$d" "$h" && [[ "$s" == */accum_${d//-/}00_run* ]] && continue
-        rc=1
-    done
+    # A 24 h file verified lost: the whole 00Z is written missing, from no input.
+    if ! lost_00z "$d" "$h"; then
+        raw_ok "$(raw_path "$d" "$h")" || return 1
+        if [ "${DRY_RUN}" = "1" ]; then submit_convert "$d" "$h"; return 0; fi
+        [ -s "$(own_snap "$d" "$h")" ] || rc=1
+        for s in $(window_snaps "$d" "$h"); do
+            [ -s "$s" ] || rc=1
+        done
+    elif [ "${DRY_RUN}" = "1" ]; then
+        submit_convert "$d" "$h"; return 0
+    fi
     if [ "$rc" -eq 0 ]; then
         mkdir -p "$SUBMIT_MARKS"
         (
@@ -491,11 +518,17 @@ next_hour() { TZ=UTC date -d "@$(( $(epoch_of "$1" "$2") + 3600 ))" '+%Y-%m-%d %
 process_one() {
     local d="$1" h="$2"
     local dt="${d}T${h}" size nd nh
+    if lost_00z "$d" "$h"; then
+        log_status "$dt" "MISSING_00Z_DECLARED" "24 h file of run $(archive_run "$d" "$h") verified lost (pipeline.missing_00z_days): the whole timestep is written missing"
+        [ "${DOWNLOAD_ONLY}" = "1" ] || submit_if_ready "$d" "$h" || true
+        return 0
+    fi
+    [ "$h" = "00" ] && evict_spinup_00z "$d"
     fetch_wrfout "$d" "$h" || return 1
     if [ "${DRY_RUN}" = "1" ]; then
         log_status "$dt" "FETCH_OK" "(dry-run)"
         make_snapshot "$(raw_path "$d" "$h")" "$dt"
-        [ "$h" = "00" ] && ensure_dayend "$d"
+        [ "$h" = "01" ] && ensure_spinup "$d"
         if [ "${DOWNLOAD_ONLY}" != "1" ]; then
             submit_convert "$d" "$h"
             log_status "$dt" "CONVERT_SUBMITTED" "(dry-run)"
@@ -506,7 +539,7 @@ process_one() {
 
     log_status "$dt" "FETCH_OK" "size=${size}B"
     ensure_archive_snapshot "$d" "$h" || true
-    [ "$h" = "00" ] && { ensure_dayend "$d" || true; }
+    [ "$h" = "01" ] && { ensure_spinup "$d" || true; }
     if [ "${DOWNLOAD_ONLY}" = "1" ]; then
         echo "  [${dt}] fetched (download-only: no convert, wrfout kept)."
         return 0
@@ -535,10 +568,12 @@ snapshot_only() {
     submit_if_ready "$nd" "$nh" || true
 }
 
-# Does the hour after (day $1, hour $2) still need this state's snapshot?
+# Does the hour after (day $1, hour $2) still need this state's snapshot? Never
+# after 00Z: 01Z is differenced against the spin-up 00Z, fetched with 01Z (#72).
 next_needs_snapshot() {
     local d="$1" h="$2" nd nh
     [ "${DOWNLOAD_ONLY}" = "1" ] && return 1
+    [ "$h" = "00" ] && return 1
     read -r nd nh <<< "$(next_hour "$d" "$h")"
     within_window "$(epoch_of "$nd" "$nh")" || return 1
     [ -f "$(grib_path "$nd" "$nh")" ] && return 1
@@ -555,16 +590,20 @@ next_needs_snapshot() {
 # with what they wait for, and the chain ends.
 # The state before the window's oldest hour, which no timestep of the window brings
 # -- in download-only mode too, so that the convert chain over the staged files never
-# needs the datamover -- and, if that hour is a 00Z, its 24 h file.
+# needs the datamover. Before a 01Z that is the spin-up 00Z, not the archived one.
 fetch_edge_state() {
     local sd sh pd ph
     sd="${START_DT%T*}"; sh="${START_DT#*T}"
+    [ -f "$(grib_path "$sd" "$sh")" ] && return 0
+    if [ "$sh" = "01" ]; then
+        ensure_spinup "$sd" || true
+        return 0
+    fi
     read -r pd ph <<< "$(TZ=UTC date -d "@$(( START_EPOCH - 3600 ))" '+%Y-%m-%d %H')"
-    if ! [ -f "$(grib_path "$sd" "$sh")" ] && ! ensure_archive_snapshot "$pd" "$ph"; then
+    if ! ensure_archive_snapshot "$pd" "$ph"; then
         echo "  [${pd}T${ph}] state before the window: fetching it for its snapshot."
         snapshot_only "$pd" "$ph" edge || true
     fi
-    [ "$sh" = "00" ] && { ensure_dayend "$sd" || true; }
     return 0
 }
 
@@ -850,7 +889,7 @@ while [ "$processed" -lt "$BATCH_SIZE" ] && within_window "$CUR_EPOCH"; do
             if [ "$done_tag" = "SKIP_RAW_EXISTS" ]; then
                 # Staged before snapshots existed, or by a chain that was stopped.
                 ensure_archive_snapshot "$d" "$h" || true
-                [ "$h" = "00" ] && { ensure_dayend "$d" || true; }
+                [ "$h" = "01" ] && { ensure_spinup "$d" || true; }
             elif next_needs_snapshot "$d" "$h"; then
                 snapshot_only "$d" "$h" &
                 running=$((running + 1))

@@ -46,6 +46,12 @@ carry their accumulations summed from 00 UTC of the day instead, with nothing at
 23→00 UTC was in none of them. They are rewritten in place; a file is current when its
 accumulations' reference time is the previous hour.
 
+**The whole 00 UTC timestep comes from the previous day's run**, instantaneous fields and
+pressure levels included ([#72](https://github.com/meteocima/CHAPTER/issues/72)); see §8.5. 00 UTC
+files written before [date the #72 re-conversion completed] took their instantaneous fields from
+the next run, six hours into its spin-up. They are rewritten in place, and nothing inside a file
+tells the two apart: replace any 00 UTC file obtained before that date.
+
 ## 0. The short list
 
 | # | Property | The number |
@@ -60,6 +66,7 @@ accumulations' reference time is the previous hour.
 | 3.3 | Humidity rebuilt from `2t` and `2d` overshoots at saturation | peaks at **100.09 %** |
 | 4.1 | Below ground the pressure levels are **clamped**, not extrapolated — ERA5 extrapolates | affects **47.6 %** of the domain at 1000 hPa |
 | 4.2 | `z` is exactly `9.80665 × z_WRF`; WRF integrated with 9.81 | **0.034 %** off hydrostatic balance |
+| 4.3 | 50 hPa is the model's highest level, **copied**, not interpolated | `z` low by **227 m** on average |
 | 5.1 | `10fg` is the resolved 10 m wind, **not a gust parameterisation** | **0.625** of ERA5's gust |
 | 5.2 | Its declared one-hour window is right **88 %** of the time | excess **0.499–0.784 m/s** on the bad hours |
 | 6.1 | Three runoff variables carry one field's information | `ssro` non-zero at ≤ **19** points |
@@ -69,7 +76,7 @@ accumulations' reference time is the previous hour.
 | 8.1 | `generatingProcessIdentifier = 128` marks **every** message and discriminates nothing | 246 of 246 |
 | 8.2 | `al` is a two-season table value by category, not a continuous field | 8–11 distinct values domain-wide |
 | 8.3 | `slor` is the slope of the **resolved** 3 km terrain, not of sub-grid orography | eccodes shows the ECMWF name |
-| 8.5 | At 00 UTC the accumulations come from the **previous day's** model run | the hour 23→00: **3.1 %** of a February day's precipitation |
+| 8.5 | 00 UTC is the **previous day's** model run, the whole timestep; the run switch falls between 00 and 01 UTC | `2t` jumps **1.8 K** RMS at the switch, 0.66 K in an ordinary hour |
 
 ---
 
@@ -344,6 +351,23 @@ agree with each other exactly — which they do, verified point by point over 1 
 points. Measured in [#39](https://github.com/meteocima/CHAPTER/issues/39).
 
 ---
+
+### 4.3 50 hPa is the model's highest level, copied, not interpolated
+
+The model top is at 50 hPa (`p_top_requested = 5000` Pa) and the highest model level, where
+temperature and geopotential live, sits at **51.9 hPa** on average. 50 hPa is therefore above
+the last level, and the interpolation does what it does above the model: it **copies** the
+highest level. Measured on 2024-01-19 00 UTC, `t` at 50 hPa equals the top level's temperature
+to 0.009 K and `z` at 50 hPa equals its geopotential to the metre.
+
+For `t` the copy costs little: between 51.9 and 50 hPa the stratosphere is close to isothermal.
+For `z` it does not: the hydrostatic thickness of that layer is **227 m** on average (214 to
+239 m over the domain), so the published `z` at 50 hPa is **low by that amount**, about 5 % of
+the 100 → 50 hPa thickness. `u`, `v`, `q` and the other fields are likewise the 51.9 hPa values.
+
+**What to do.** Treat 50 hPa as the top of the model, not as an isobaric surface: do not use its
+`z` for a thickness or a geostrophic wind against 100 hPa without adding the missing layer.
+Nothing above 50 hPa exists in this run, at any level.
 
 ## 5. Wind
 
@@ -642,26 +666,38 @@ be our invention — without mentioning that the underlying field exists. It doe
 LAI, which is a second reason not to split it. Measured in
 [#35](https://github.com/meteocima/CHAPTER/issues/35).
 
-### 8.5 At 00 UTC the accumulations come from the previous day's run
+### 8.5 00 UTC is the previous day's model run, and the run switch falls at 01 UTC
 
-Each model run covers one day: it starts at 18 UTC of the day before (six hours of spin-up) and
-ends at 00 UTC of the day after. The archive's 00 UTC file belongs to the run for its own day,
-six hours into that run's spin-up, and its **instantaneous** fields come from there. That run
-has not integrated the hour 23→00 UTC of the previous day — the run for the previous day has,
-in its last hour — so the 00 UTC file's **accumulations** come from that other run. ERA5 does
-the same for the same reason: its accumulations at 00 UTC come from the forecast started at
-18 UTC.
+Each model run covers one day: it starts at 18 UTC of the day before and ends at 00 UTC of the
+day after, 30 hours. Its first six hours are spin-up and are never published. So the archive's
+day D is 01 to 23 UTC of the run for D, and its 00 UTC is the **last** hour of the run for D−1:
+every field of the file, instantaneous, on pressure levels and accumulated, comes from that one
+state. ERA5 takes its 00 UTC accumulations from the forecast started at 18 UTC for the same
+reason.
 
-The hour is not small. On 2019-02-10 it held **3.1 %** of the day's precipitation, **7.6 %** of
-its snowfall and **4.2 %** of its downward longwave; its omission is why files written before
-2026-10-07 under-state every daily total.
+The accumulations at 00 UTC are the hour 23→00 UTC of the run for D−1, its 24 h state minus its
+23 UTC state. The hour is not small: on 2019-02-10 it held **3.1 %** of the day's precipitation,
+**7.6 %** of its snowfall and **4.2 %** of its downward longwave. The 24 hours from 01 UTC of D to
+00 UTC of D+1 all come from the same run, so their sum is that run's own daily total.
 
-**What to do.** Nothing, as long as you index on validity time: the 00 UTC accumulations belong
-to the hour ending at 00 UTC, which is the last hour of the previous day. Expect a small
-discontinuity between the 00 UTC accumulations and the instantaneous fields in the same file —
-they are two runs, which differ by up to 10 K in `2t` at the same instant. Where the previous
-day's run cannot supply its last hour, those accumulations are **missing** (a bitmap), never
-zero. Measured in [#70](https://github.com/meteocima/CHAPTER/issues/70).
+The run switch is still there, once a day, between 00 and 01 UTC. Its size is the difference
+between two runs at the same instant, not an hour of weather. Measured on 2024-01-18/19 over the
+full domain, root-mean-square:
+
+| | `2t` (K) | `sp` (hPa) | 10 m wind (m/s) | `t` 850 hPa (K) | `tcwv` (kg/m²) |
+|---|---|---|---|---|---|
+| an hour within one run, 23→00 UTC | 0.66 | 0.50 | 1.13 | 0.48 | 0.89 |
+| the switch, 00→01 UTC | **1.79** | **1.62** | **1.62** | **0.94** | **1.54** |
+
+The switch reaches 11.0 K in `2t` at single points. The hour 00→01 UTC is the run for D at
+lead 6→7, the first hour after its spin-up.
+
+**What to do.** Index on validity time. A tendency or a time derivative computed across 00→01
+UTC sees the switch; on this day it is 2.7 times the hourly change in `2t`. Where the previous
+day's 24 h state is lost at the source, the **whole** 00 UTC timestep is missing (every message
+a bitmap), never filled from the next run. Measured in
+[#70](https://github.com/meteocima/CHAPTER/issues/70) and
+[#72](https://github.com/meteocima/CHAPTER/issues/72).
 
 ---
 

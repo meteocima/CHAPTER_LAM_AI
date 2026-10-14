@@ -489,3 +489,27 @@ Of the first ~70 24 h files fetched for the 2019 summer days of the archive, **4
 the relay**, while the same runs' 24 archived files are whole; January 2019 and 2024 came back
 whole. Those 00Z hours stay 0-H until the files are recovered or their loss is verified on LRZ.
 
+
+## The whole 00Z from the previous day's run, and where the run switch falls (#72)
+
+Since [#72](https://github.com/meteocima/CHAPTER/issues/72) the 00Z of day D is the 24 h file of
+the run for D-1 in every field, not only in its accumulations. Re-converting 2024-01-19 00Z from
+that file (run 2024011718) changes 199 of the 227 instantaneous messages; the 28 unchanged are the
+statics, `fal` at night and zero cloud levels. The 19 accumulations recomputed as 24 h - 23Z
+match the archived ones to one packing quantum (7.5e-9 m on `tp`, at most 1 J/m^2 on radiation),
+and copied from the old file with `--accum-from-grib` they are identical to the byte.
+
+The run switch moves from 23Z -> 00Z to 00Z -> 01Z and keeps its size. `tools/audit/run_switch.py`
+on the archive's files for 2024-01-18/19, full domain, RMS (p99, max):
+
+| change | `2t` K | `sp` hPa | 10 m wind m/s | `t` 850 K | `tcwv` kg/m^2 |
+|---|---|---|---|---|---|
+| hour within run D-1, 22Z -> 23Z | 0.69 (2.25, 8.3) | 0.66 | 1.13 | 0.47 | 0.90 |
+| hour within run D-1, 23Z -> new 00Z | 0.66 (2.18, 9.1) | 0.50 | 1.13 | 0.48 | 0.89 |
+| switch before #72, 23Z (lead 29) -> 00Z (lead 6) | 1.83 (5.86, 10.8) | 1.58 | 1.61 | 0.94 | 1.52 |
+| switch since #72, 00Z (lead 30) -> 01Z (lead 7) | 1.79 (5.81, 11.0) | 1.62 | 1.62 | 0.94 | 1.54 |
+| hour within run D, 01Z -> 02Z | 0.55 (1.93, 6.6) | 0.70 | 0.99 | 0.43 | 0.78 |
+| the two runs at 00Z, lead 30 vs lead 6 | 1.62 (5.45, 11.3) | 1.43 | 1.57 | 0.94 | 1.49 |
+
+One day, in January; the switch is the inter-run difference at one instant, which stays flat
+from lead 5 to lead 6 (1.65 and 1.62 K in `2t`, measured on the wrfout).

@@ -362,4 +362,6 @@ def test_the_24h_snapshot_goes_with_the_00z_that_consumed_it(tmp_path, fix):
     fix.rewrite_hour(grib_of(v), v, {TP: np.zeros(6)})
     ah.release(v, snaps, grib_of)
     assert not s24.exists() and s23.exists()             # 23Z of the 10th not converted yet
-    assert not ah.wrfout_may_go(v, snaps, grib_of)       # 00Z's own state was never saved
+    # 00Z's own state is the 24 h one (#72): no other hour reads it, 01Z reads the
+    # spin-up 00Z, so its wrfout may go once its own hour is converted.
+    assert ah.wrfout_may_go(v, snaps, grib_of)

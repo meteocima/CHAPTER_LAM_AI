@@ -527,3 +527,13 @@ distinguishes them.
   column integrals already use the all-species denominator. Family 3 should
   however expect the same liquid/ice partition difference in `tclw` and `tciw`
   that appears here, and read their sum.
+
+## 50 hPa is the highest model level, copied
+
+`p_top_requested = 5000` Pa: the model top is 50 hPa, and the highest mass level sits at
+51.85-51.96 hPa (2024-04-15 12Z), 51.90 hPa on average (2024-01-19 00Z). Above the last level
+`vinterp` copies it (`fortran/wrf_vinterp.f90`), and `tools/audit/f1_top_level.py` on 2024-01-19
+00Z confirms the copy: `t` at 50 hPa equals the top level's to 0.009 K (packing), `z` to the
+metre. The hydrostatic layer between the top level and 50 hPa is 227 m thick on average (214 to
+239 m), so the published `z` at 50 hPa is low by that amount, against a published 100 -> 50 hPa
+thickness of 4009 m. ERA5's 8 levels above 50 hPa cannot be produced from this run at all.

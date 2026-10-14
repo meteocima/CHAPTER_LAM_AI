@@ -125,6 +125,9 @@ EXPECTED_KINDS = {
     # #71: an hour is converted only once the snapshots of its window exist.
     'SNAPSHOT_FAILED': ledger.PROBLEM,
     'DAYEND_UNAVAILABLE': ledger.PROBLEM,
+    # #72: the spin-up 00Z 01Z is differenced against; a 00Z declared lost.
+    'SPINUP_UNAVAILABLE': ledger.PROBLEM,
+    'MISSING_00Z_DECLARED': ledger.CLEAR,
     'CONVERT_BLOCKED': ledger.PROBLEM,
     'SUBMIT_FAILED': ledger.PROBLEM,
     'CONVERT_WAITING': ledger.PROBLEM,
@@ -197,7 +200,7 @@ def tokens_written_by_the_driver():
 def test_the_driver_tokens_can_still_be_read_out_of_the_driver():
     """Guards the three tests below: a subset assertion passes trivially against
     an empty set, so a regex that quietly stops matching would look like health."""
-    assert len(tokens_written_by_the_driver()) == 17
+    assert len(tokens_written_by_the_driver()) == 18
 
 
 def test_the_driver_writes_no_token_this_module_has_not_been_taught():

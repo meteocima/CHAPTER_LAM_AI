@@ -4,8 +4,9 @@ Every accumulated field covers the hour ending at its validity time, from two
 states of the SAME run. The expected values below come from the files
 themselves, not from re-deriving the rule: on 2026-10-07 the 24 h file of run
 2019020918 was fetched and read back, START_DATE 2019-02-09_18, Times
-2019-02-11_00, and the archived 00Z of 2019-02-11 carries START_DATE
-2019-02-10_18 -- a different run, which is why the 00Z hour cannot come from it.
+2019-02-11_00, while the 00Z of 2019-02-11 in the run for that day carries
+START_DATE 2019-02-10_18 -- 6 h into its spin-up. Since #72 the whole 00Z
+timestep is the 24 h file; the spin-up 00Z is only the state before 01Z.
 """
 from datetime import datetime
 
@@ -23,9 +24,19 @@ def test_hours_01_to_23_stay_in_the_run_the_archive_was_fetched_from():
     curr, prev = ah.window(datetime(2019, 2, 2, 5))
     assert ah.source_file(prev) == ('2019020118', 'wrfout_d02_2019-02-02_04:00:00')
     assert ah.source_file(curr) == ('2019020118', 'wrfout_d02_2019-02-02_05:00:00')
-    # 01Z reaches back to the archived 00Z of the same day, same run.
+    # 01Z reaches back to the 00Z of the same run: its spin-up 00Z, not the archived one.
     curr, prev = ah.window(datetime(2019, 2, 2, 1))
     assert ah.source_file(prev) == ('2019020118', 'wrfout_d02_2019-02-02_00:00:00')
+    assert prev == ah.spinup_state(datetime(2019, 2, 2))
+    assert prev != ah.archive_state(datetime(2019, 2, 2, 0))
+
+
+def test_the_archived_00z_is_the_24h_file_of_the_previous_days_run():
+    # #72: the whole timestep, not only its hour.
+    assert ah.source_file(ah.archive_state(datetime(2019, 2, 11, 0))) == \
+        ('2019020918', 'wrfout_d02_2019-02-11_00:00:00')
+    assert ah.source_file(ah.archive_state(datetime(2019, 2, 11, 1))) == \
+        ('2019021018', 'wrfout_d02_2019-02-11_01:00:00')
 
 
 def _deltas(**over):
@@ -122,24 +133,77 @@ def test_a_missing_snapshot_is_made_from_the_wrfout_next_to_the_input(tmp_path):
     assert ah.increments(inp, tmp_path / 'snaps')['RAINNC'][0, 0] == 1.0
 
 
-def test_00z_ignores_the_input_and_takes_two_states_of_the_previous_days_run(tmp_path):
+def test_00z_is_the_24h_file_minus_the_23z_of_the_same_run(tmp_path):
     import pytest
     snaps = tmp_path / 'snaps'
-    # The archived 00Z (run for 02-11): 6 h of spin-up, useless for the hour.
-    inp = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_00:00:00', 3.0)
-    with pytest.raises(FileNotFoundError, match='2019020918'):
-        ah.increments(inp, snaps)
-    ah.write_snapshot(_fake_wrfout(tmp_path / 'a', '2019-02-09_18:00:00',
-                                   '2019-02-11_00:00:00', 40.0), snaps)
+    inp = _fake_wrfout(tmp_path / 'in', '2019-02-09_18:00:00', '2019-02-11_00:00:00', 40.0)
+    with pytest.raises(FileNotFoundError, match='2019-02-10T23'):
+        ah.increments(inp, snaps)                         # the 23Z is never guessed
     ah.write_snapshot(_fake_wrfout(tmp_path / 'b', '2019-02-09_18:00:00',
                                    '2019-02-10_23:00:00', 39.0), snaps)
     assert ah.increments(inp, snaps)['RAINNC'][0, 0] == 1.0
 
 
+def test_the_spin_up_00z_is_refused_as_an_input(tmp_path):
+    import pytest
+    snaps = tmp_path / 'snaps'
+    ah.write_snapshot(_fake_wrfout(tmp_path / 'b', '2019-02-09_18:00:00',
+                                   '2019-02-10_23:00:00', 39.0), snaps)
+    spin = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_00:00:00', 3.0)
+    with pytest.raises(ValueError, match='#72'):
+        ah.increments(spin, snaps)
+
+
+def test_01z_is_differenced_against_the_spin_up_00z(tmp_path):
+    snaps = tmp_path / 'snaps'
+    ah.write_snapshot(_fake_wrfout(tmp_path / 'a', '2019-02-09_18:00:00',
+                                   '2019-02-11_00:00:00', 40.0), snaps)    # the archived 00Z
+    ah.write_snapshot(_fake_wrfout(tmp_path / 's', '2019-02-10_18:00:00',
+                                   '2019-02-11_00:00:00', 3.0), snaps)     # the spin-up 00Z
+    inp = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_01:00:00', 3.5)
+    assert ah.increments(inp, snaps)['RAINNC'][0, 0] == 0.5
+
+
 def test_the_snapshots_an_hour_consumes():
-    curr, prev = ah.window(datetime(2019, 2, 11, 0))
-    assert ah.consumed(datetime(2019, 2, 11, 0)) == [curr, prev]       # 24 h file and 23Z
-    assert ah.consumed(datetime(2019, 2, 11, 5)) == [ah.window(datetime(2019, 2, 11, 5))[1]]
+    for v in (datetime(2019, 2, 11, 0), datetime(2019, 2, 11, 1), datetime(2019, 2, 11, 5)):
+        assert ah.consumed(v) == [ah.window(v)[1]]          # the input is the current state
+
+
+def test_who_reads_each_state():
+    d = datetime(2019, 2, 11)
+    hour = lambda h: d.replace(hour=h) if h < 24 else datetime(2019, 2, 12)   # noqa: E731
+    assert ah.readers(ah.archive_state(hour(5))) == [hour(5), hour(6)]
+    assert ah.readers(ah.archive_state(hour(0))) == [hour(0)]      # 01Z reads the spin-up
+    assert ah.readers(ah.spinup_state(d)) == [hour(1)]
+    assert ah.readers(ah.archive_state(hour(23))) == [hour(23), hour(24)]
+
+
+def _hourly_grib_of(done):
+    """grib_of for release/wrfout_may_go: a path that exists for the hours in `done`."""
+    return lambda v: f"/hourly/{v:%Y%m%d%H}" if v in done else f"/none/{v:%Y%m%d%H}"
+
+
+def test_a_state_is_released_once_every_hour_reading_it_is_converted(tmp_path, monkeypatch):
+    snaps = tmp_path / 'snaps'
+    d = datetime(2019, 2, 11)
+    t0, t1, t23 = d, d.replace(hour=1), datetime(2019, 2, 10, 23)
+    states = {'00': ah.archive_state(t0), 'spin': ah.spinup_state(d), '23': ah.archive_state(t23)}
+    for st in states.values():
+        path = ah.snapshot_path(snaps, st)
+        __import__('os').makedirs(__import__('os').path.dirname(path), exist_ok=True)
+        open(path, 'w').close()
+    exists = lambda st: __import__('os').path.isfile(ah.snapshot_path(snaps, st))   # noqa: E731
+    monkeypatch.setattr(ah, 'is_hourly_grib', lambda path, v: path.startswith('/hourly/'))
+    # 00Z converted, 01Z not: the 24 h state and the 23Z go, the spin-up stays.
+    ah.release(t0, snaps, _hourly_grib_of({t0, t23}))
+    assert not exists(states['00']) and not exists(states['23']) and exists(states['spin'])
+    ah.release(t1, snaps, _hourly_grib_of({t1}))                 # 01Z alone frees the spin-up
+    assert not exists(states['spin'])
+
+
+def test_the_archived_00z_wrfout_may_go_once_its_own_hour_is_converted(tmp_path):
+    assert ah.wrfout_may_go(datetime(2019, 2, 11, 0), tmp_path, _hourly_grib_of(set()))
+    assert not ah.wrfout_may_go(datetime(2019, 2, 11, 5), tmp_path, _hourly_grib_of(set()))
 
 
 # ---------------------------------------------------------------------------
@@ -172,9 +236,7 @@ def bash(fn, *args):
 def test_the_driver_names_the_snapshots_an_hour_needs_as_accum_hourly_does():
     for v in CASES:
         d, h = f"{v:%Y-%m-%d}", f"{v:%H}"
-        curr, prev = ah.window(v)
-        want = [prev] if v.hour else [curr, prev]
-        assert bash('window_snaps', d, h) == [ah.snapshot_path('/S', s) for s in want], v
+        assert bash('window_snaps', d, h) == [ah.snapshot_path('/S', s) for s in ah.consumed(v)], v
 
 
 def test_the_driver_names_an_archived_files_own_snapshot_as_accum_hourly_does():
@@ -183,22 +245,13 @@ def test_the_driver_names_an_archived_files_own_snapshot_as_accum_hourly_does():
         assert bash('own_snap', d, h) == [ah.snapshot_path('/S', ah.archive_state(v))], v
 
 
-def test_a_lost_24h_file_gives_no_increments_only_when_declared_lost(tmp_path):
-    import pytest
-    snaps = tmp_path / 'snaps'
-    inp = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_00:00:00', 3.0)
-    ah.write_snapshot(_fake_wrfout(tmp_path / 'b', '2019-02-09_18:00:00',
-                                   '2019-02-10_23:00:00', 39.0), snaps)
-    with pytest.raises(FileNotFoundError):                    # by default nothing is guessed
-        ah.increments(inp, snaps)
-    assert ah.increments(inp, snaps, dayend_lost=True) is None   # the hour is missing
+def test_the_driver_names_the_spin_up_snapshot_as_accum_hourly_does():
+    for v in CASES:
+        d = f"{v:%Y-%m-%d}"
+        assert bash('spinup_snap', d) == [ah.snapshot_path('/S', ah.spinup_state(v))], v
 
 
-def test_declaring_the_24h_file_lost_does_not_excuse_a_23z_still_in_transit(tmp_path):
-    import pytest
-    snaps = tmp_path / 'snaps'
-    inp = _fake_wrfout(tmp_path / 'in', '2019-02-10_18:00:00', '2019-02-11_00:00:00', 3.0)
-    ah.write_snapshot(_fake_wrfout(tmp_path / 'a', '2019-02-09_18:00:00',
-                                   '2019-02-11_00:00:00', 40.0), snaps)
-    with pytest.raises(FileNotFoundError, match='2019-02-10T23'):
-        ah.increments(inp, snaps, dayend_lost=True)
+def test_the_driver_names_the_run_of_an_archived_file_as_accum_hourly_does():
+    for v in CASES:
+        assert bash('archive_run', f"{v:%Y-%m-%d}", f"{v:%H}") == \
+            [ah.source_file(ah.archive_state(v))[0]], v

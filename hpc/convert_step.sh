@@ -21,8 +21,13 @@
 #   STATIC_REF_DIR- (optional) geo_em sidecar for the static land fields
 #                   (static_ref.py); default: <GRIB_DIR>/../static_v1
 #   KEEP_WRFOUT   - (optional) "1" to keep the input wrfout after a successful convert
-#   MISSING_00Z_AS_BITMAP - (optional) non-empty: a 00Z whose 24 h file was verified
-#                   lost at the source gets its accumulations as missing (#71)
+#   MISSING_TIMESTEP - (optional) non-empty: a 00Z whose 24 h file was verified lost
+#                   at the source is written with every message missing, from no
+#                   input (#72). The 00Z of the next run never stands in for it
+#
+# For 00Z of day D the input is the 24 h file of the run for D-1 (#72): the driver
+# puts it at the usual path, wrfout_d02_<D>_00:00:00, and the converter refuses
+# the file of the same name from the run for D.
 
 set -euo pipefail
 
@@ -71,7 +76,7 @@ if [ -f "${OUTPUT}" ]; then
 fi
 
 # Check input exists
-if [ ! -f "${INPUT}" ]; then
+if [ -z "${MISSING_TIMESTEP:-}" ] && [ ! -f "${INPUT}" ]; then
     echo "ERROR: Input wrfout not found: ${INPUT}"
     exit 1
 fi
@@ -85,12 +90,18 @@ ECCODES_LIB="/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0
 export LD_PRELOAD="$GCC12_RT/libstdc++.so.6"
 export LD_LIBRARY_PATH="$GCC12_RT:$ECCODES_LIB:${LD_LIBRARY_PATH:-}"
 
-uv run python convert_to_pressure_levels.py \
-    --input "${INPUT}" \
-    --output "${TMPOUT}" \
-    --accum-snap-dir "${ACCUM_SNAP_DIR}" \
-    ${MISSING_00Z_AS_BITMAP:+--missing-00z-as-bitmap} \
-    --static-ref-dir "${STATIC_REF_DIR}"
+if [ -n "${MISSING_TIMESTEP:-}" ]; then
+    uv run python convert_to_pressure_levels.py \
+        --missing-timestep "${TARGET_DATE}T${HOUR}" \
+        --output "${TMPOUT}" \
+        --static-ref-dir "${STATIC_REF_DIR}"
+else
+    uv run python convert_to_pressure_levels.py \
+        --input "${INPUT}" \
+        --output "${TMPOUT}" \
+        --accum-snap-dir "${ACCUM_SNAP_DIR}" \
+        --static-ref-dir "${STATIC_REF_DIR}"
+fi
 
 # Atomic rename on success
 mv "${TMPOUT}" "${OUTPUT}"
@@ -101,6 +112,10 @@ echo ""
 # have their GRIB (accum_hourly.release). Then: never delete a wrfout whose state
 # is unsaved while the next hour still has to be differenced against it.
 uv run python accum_hourly.py release "${TARGET_DATE}T${HOUR}" "${ACCUM_SNAP_DIR}" "${GRIB_PATTERN}" || true
+if [ -n "${MISSING_TIMESTEP:-}" ]; then
+    echo "Written as missing: there is no input wrfout."
+    exit 0
+fi
 if [ "${KEEP_WRFOUT:-0}" = "1" ]; then
     echo "Conversion successful. KEEP_WRFOUT=1: keeping ${INPUT}"
     exit 0

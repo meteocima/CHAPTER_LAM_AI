@@ -7,12 +7,16 @@ validity time, as ERA5, ITINERE and ICON-2I publish them (issue #70).
     field(H) = WRF(H) - WRF(H - 1 h)      both states from the SAME run
 
 The run for target day D starts at 18Z of D-1 and lasts 30 h, so it ends at
-00Z of D+1. The archive takes 00Z of D from the run for D (6 h of spin-up),
-whose accumulators start there; the hour 23Z(D-1) -> 00Z(D) exists only in
-the run for D-1, as its 24 h file -- which the archive never fetched. So:
+00Z of D+1. Its first six hours are spin-up and are never published: the
+archive takes 01Z..23Z of D from the run for D, and the WHOLE of 00Z of D --
+instantaneous fields and accumulations alike -- from the run for D-1, as its
+24 h file (issue #72). So every archived file is one state of one run:
 
     01Z..23Z of D  -> run for D:    the archived file and the one before it
     00Z of D       -> run for D-1:  its 24 h file and its 23Z file
+
+The state before 01Z of D is 00Z of the run for D, 6 h into its spin-up: it
+is fetched for its snapshot alone, never converted (`spinup_state`).
 
 A state is a (valid time, run init) pair: 00Z of D exists in two runs.
 """
@@ -38,8 +42,16 @@ def run_for_day(day):
 
 
 def archive_state(valid):
-    """The state an archived file valid at `valid` holds: the run for its own day."""
-    return State(valid, run_for_day(valid))
+    """The state an archived file valid at `valid` holds: the run for its own day,
+    or for 00Z the run for the day before (#72). The current state of its hour."""
+    return window(valid)[0]
+
+
+def spinup_state(day):
+    """00Z of `day` in the run for `day`, 6 h into its spin-up: the state the hour
+    00Z -> 01Z is differenced against, and nothing else. Never archived."""
+    d = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    return State(d, run_for_day(d))
 
 
 def window(valid):
@@ -179,40 +191,39 @@ def _snapshot_or_local(snap_dir, state, near):
         return load_snapshot(snap_dir, state)
 
 
-def increments(input_file, snap_dir, dayend_lost=False):
+def increments(input_file, snap_dir):
     """{native accumulator: its increment over the hour ending at the input's
-    validity}, native units, float64. For 01Z..23Z the input itself is the
-    current state; for 00Z it is not -- it belongs to the next run, 6 h into
-    its spin-up -- and both states come from the run for the previous day.
-    A state with neither a snapshot nor a local wrfout raises FileNotFoundError:
-    an hour is never guessed.
-
-    `dayend_lost` is for a 24 h file verified lost at the source: then a 00Z
-    with no 24 h state returns None, and the hour is published missing. It does
-    not excuse a 23Z state that has simply not arrived yet."""
+    validity}, native units, float64. The input is the current state of its
+    hour -- for 00Z of D the 24 h file of the run for D-1 (#72) -- and the state
+    before it comes from a snapshot or a wrfout beside the input. Any other
+    file is refused, the 00Z of the run for D above all: it is 6 h into its
+    spin-up and is never published. A state with neither a snapshot nor a local
+    wrfout raises FileNotFoundError: an hour is never guessed."""
     own = state_of(input_file)
     curr, prev = window(own.valid)
-    if own == curr:
-        fields, _ = accum_ref.extract_from_wrfout(str(input_file))
-    elif own.valid.hour == 0:
-        try:
-            fields = _snapshot_or_local(snap_dir, curr, input_file)
-        except FileNotFoundError:
-            if dayend_lost:
-                return None
-            raise
-    else:
-        raise ValueError(f"{input_file} is from run {own.run:%Y%m%d%H}, not the run for its "
-                         f"day ({curr.run:%Y%m%d%H})")
+    if own != curr:
+        why = (" -- the 00Z of a day comes from the previous day's run, its 24 h file (#72)"
+               if own.valid.hour == 0 else "")
+        raise ValueError(f"{input_file} is from run {own.run:%Y%m%d%H}, not run "
+                         f"{curr.run:%Y%m%d%H}{why}")
+    fields, _ = accum_ref.extract_from_wrfout(str(input_file))
     before = _snapshot_or_local(snap_dir, prev, input_file)
     return {v: fields[v].astype(np.float64) - before[v] for v in accum_ref.ACCUMULATED_VARS}
 
 
 def consumed(valid):
-    """The snapshots the hour ending at `valid` reads -- and nothing else reads:
-    each state is the previous state of exactly one hour."""
-    curr, prev = window(valid)
-    return [curr, prev] if valid.hour == 0 else [prev]
+    """The snapshots the hour ending at `valid` reads: the state before it. Its
+    current state is the input itself, at 00Z too since #72."""
+    return [window(valid)[1]]
+
+
+def readers(state):
+    """The hours whose accumulation reads `state`: its own hour, if it is that
+    hour's current state, and the hour after, if it is that one's state before.
+    An ordinary hour has both; 00Z's 24 h state only its own (01Z reads the
+    spin-up state instead); the spin-up state only 01Z."""
+    hour = timedelta(hours=1)
+    return [v for v in (state.valid, state.valid + hour) if state in window(v)]
 
 
 def is_hourly_grib(path, valid):
@@ -238,40 +249,38 @@ def is_hourly_grib(path, valid):
 
 def release(valid, snap_dir, grib_of):
     """Delete the snapshots that nobody needs any more, once the hour ending at
-    `valid` has its GRIB. A state is needed by two jobs: the hour it belongs to
-    (which must not drop its wrfout before the state is saved, wrfout_may_go)
-    and the hour after it (which differences against it). Jobs finish in any
-    order, so each one deletes a state only when BOTH have their GRIB:
-      - this hour's own state, if the next hour is converted;
-      - the state before, if its own hour is converted;
-      - for 00Z, the 24 h state, which belongs to no archived hour.
+    `valid` has its GRIB. A state goes once every hour that reads it (`readers`)
+    has its GRIB -- its own hour too, which must not drop its wrfout before the
+    state is saved (wrfout_may_go). Jobs finish in any order, so each one looks
+    at the two states its hour touches: its own and the one before.
     "Has its GRIB" means an HOURLY one: a 0-H file left from before #71 still
     needs the state before it, to be made hourly by hpc/fix_accum_hourly.py.
     `grib_of(datetime)` is the GRIB path of an hour. Returns the deleted paths."""
-    hour = timedelta(hours=1)
-    curr, prev = window(valid)
-    candidates = [(archive_state(valid), valid + hour), (prev, prev.valid)]
-    if valid.hour == 0:
-        candidates.append((curr, valid))
     deleted = []
-    for state, other in candidates:
+    for state in (archive_state(valid), window(valid)[1]):
         path = snapshot_path(snap_dir, state)
-        if (os.path.isfile(path) and is_hourly_grib(grib_of(valid), valid)
-                and is_hourly_grib(grib_of(other), other)):
+        if os.path.isfile(path) and all(is_hourly_grib(grib_of(v), v) for v in readers(state)):
             os.remove(path)
             deleted.append(path)
     return deleted
 
 
 def wrfout_may_go(valid, snap_dir, grib_of):
-    """May the archived wrfout valid at `valid` be deleted? Only if its state is
-    saved, or the hour after it -- the only one that reads that state -- is
-    already converted."""
-    return (os.path.isfile(snapshot_path(snap_dir, archive_state(valid)))
-            or os.path.isfile(grib_of(valid + timedelta(hours=1))))
+    """May the archived wrfout valid at `valid` be deleted, once its own hour is
+    converted? Only if its state is saved, or every other hour that reads that
+    state is converted already -- for 00Z there is none (#72)."""
+    state = archive_state(valid)
+    return (os.path.isfile(snapshot_path(snap_dir, state))
+            or all(os.path.isfile(grib_of(v)) for v in readers(state) if v != valid))
 
 
 def _cli(argv):
+    if len(argv) == 2 and argv[0] == 'state':
+        # The driver's check that a local file is the state it is named for:
+        # two files on the relay are called wrfout_d02_<D>_00:00:00.
+        state = state_of(argv[1])
+        print(f"{state.valid:%Y%m%d%H} {state.run:%Y%m%d%H}")
+        return 0
     if len(argv) == 3 and argv[0] == 'snapshot':
         state = write_snapshot(argv[1], argv[2])
         print(f"written: {snapshot_path(argv[2], state)}")
@@ -287,7 +296,8 @@ def _cli(argv):
         for path in release(valid, argv[2], grib_of):
             print(f"deleted: {path}")
         return 0
-    print("usage: python accum_hourly.py snapshot <wrfout> <snap_dir>\n"
+    print("usage: python accum_hourly.py state <wrfout>\n"
+          "       python accum_hourly.py snapshot <wrfout> <snap_dir>\n"
           "       python accum_hourly.py release|may-delete <YYYY-MM-DDTHH> <snap_dir> <grib_pattern>")
     return 2
 
