@@ -513,3 +513,21 @@ on the archive's files for 2024-01-18/19, full domain, RMS (p99, max):
 
 One day, in January; the switch is the inter-run difference at one instant, which stays flat
 from lead 5 to lead 6 (1.65 and 1.62 K in `2t`, measured on the wrfout).
+
+## The runoff triplet, hourly
+
+Re-measured on 2026-10-14 on the hourly `grib_v3` files (the table above is 0-H), domain means in m:
+
+| validity time | `sro` | `ssro` | `ssro` non-zero points | `ro` | max abs(`ro`-`sro`-`ssro`) |
+|---|---|---|---|---|---|
+| 2024-01-15 12Z | 4.784e-6 | 0 | 0 | 4.784e-6 | 0 |
+| 2024-02-15 12Z | 4.819e-6 | 0 | 0 | 4.819e-6 | 0 |
+| 2024-03-15 12Z | 1.361e-5 | 3.6e-11 | 1 | 1.361e-5 | 3.7e-9 |
+| 2024-07-15 00Z | 9.345e-7 | 8.1e-9 | 14 | 9.426e-7 | 7.5e-9 |
+| 2024-07-15 06Z | 1.181e-6 | 7.4e-10 | 17 | 1.181e-6 | 1.4e-9 |
+| 2024-07-15 12Z | 5.543e-6 | 2.2e-9 | 3 | 5.545e-6 | 3.7e-9 |
+| 2024-07-15 18Z | 1.829e-5 | 1.5e-9 | 2 | 1.829e-5 | 1.9e-9 |
+| 2024-08-15 12Z | 2.334e-6 | 0 | 0 | 2.334e-6 | 0 |
+
+In one hour `UDROFF` grows at no more than 17 points. The 00Z row is from the 0-H-era 00Z file
+re-converted under #71 (its accumulations are the previous day's run, 24 h - 23Z).
