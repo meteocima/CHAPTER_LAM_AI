@@ -410,10 +410,11 @@ evict_spinup_00z() {
     [ -f "$raw" ] && [ "${DRY_RUN}" != "1" ] || return 0
     state=$(cd "$PROJECT_DIR" && uv run python accum_hourly.py state "$raw" 2>/dev/null) || return 0
     [ "${state#* }" = "$(archive_run "$d" 00)" ] && return 0
-    # Its snapshot already made, it has no use left: ensure_spinup would never
-    # look at it again, so moving it would only leave 9 GB behind.
-    if [ -s "$(spinup_snap "$d")" ]; then
-        echo "  [${d}T00] local 00Z is from run ${state#* } (spin-up), already snapshotted: deleted"
+    # Snapshotted already, or 01Z converted already (and the snapshot released):
+    # it has no use left, and ensure_spinup would never look at it again, so
+    # moving it would only leave 9 GB behind.
+    if [ -s "$(spinup_snap "$d")" ] || [ -f "$(grib_path "$d" 01)" ]; then
+        echo "  [${d}T00] local 00Z is from run ${state#* } (spin-up), no longer needed: deleted"
         timeout 60 rm -f "$raw" 2>/dev/null || true
         return 0
     fi
