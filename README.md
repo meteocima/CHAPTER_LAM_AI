@@ -2,7 +2,7 @@
 
 # CHAPTER
 
-**From the 3 km CHAPTER reanalysis of Europe and the Mediterranean to an ECMWF-compatible GRIB2 archive and an Anemoi training dataset.**
+**From the 3 km CHAPTER downscaling of ERA5 over Europe and the Mediterranean to an ECMWF-compatible GRIB2 archive and an Anemoi training dataset.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/managed%20with-uv-DE5FE9)](https://docs.astral.sh/uv/)
@@ -20,7 +20,7 @@
 
 </div>
 
-CHAPTER (*Computational Hydrometeorology with Advanced Performance to Enhanced Realism*) is a regional reanalysis of Europe and the Mediterranean basin: a convection-permitting dynamical downscaling of ERA5, produced with WRF at 3 km ([Bernini et al., 2024](https://doi.org/10.1002/qj.5014)). This repository does not run the model. It converts the hourly `wrfout` files into a GRIB2 archive with ECMWF paramIds on 13 pressure levels, and from there into an [Anemoi](https://anemoi.readthedocs.io/) Zarr dataset for machine learning.
+CHAPTER (*Computational Hydrometeorology with Advanced Performance to Enhanced Realism*) is a convection-permitting dynamical downscaling of ERA5 over Europe and the Mediterranean basin, produced with WRF at 3 km ([Bernini et al., 2025](https://doi.org/10.1002/qj.5014)). This repository does not run the model. It converts the hourly `wrfout` files into a GRIB2 archive with ECMWF paramIds on 13 pressure levels, and from there into an [Anemoi](https://anemoi.readthedocs.io/) Zarr dataset for machine learning.
 
 > [!TIP]
 > If you use the archive rather than build it, start from [CHAPTER_VARIABLES.md](CHAPTER_VARIABLES.md), which says what each field is, and [CHAPTER_KNOWN_PROPERTIES.md](CHAPTER_KNOWN_PROPERTIES.md), which lists what is correct but surprising, with the measured numbers. Both are also available as PDF.
@@ -279,7 +279,7 @@ report/                         LaTeX manual, Italian (report/) and English (rep
 | [CHAPTER_VARIABLES.md](CHAPTER_VARIABLES.md) ([PDF](CHAPTER_VARIABLES.pdf)) | every variable: paramId, units, derivation, masks, time convention |
 | [CHAPTER_KNOWN_PROPERTIES.md](CHAPTER_KNOWN_PROPERTIES.md) ([PDF](CHAPTER_KNOWN_PROPERTIES.pdf)) | what is correct and surprising, each property with its measured number |
 | [MISSING_VARIABLES.md](MISSING_VARIABLES.md) ([PDF](MISSING_VARIABLES.pdf)) | what these `wrfout` cannot give, and the possible workarounds |
-| [Manual, English](report/en/main.pdf), [Manuale, italiano](report/main.pdf) | the GRIB2 archive of the CHAPTER reanalysis, as a technical report |
+| [Manual, English](report/en/main.pdf), [Manuale, italiano](report/main.pdf) | the CHAPTER GRIB2 archive, as a technical report |
 | [docs/audit/](docs/audit/) | the September 2026 variable audit: harness, measurements, exclusions |
 | [CONTEXT.md](CONTEXT.md) | glossary of the terms used across the repository |
 | [CLAUDE.md](CLAUDE.md) | developer notes: architecture, HPC pitfalls, the reasoning behind each choice |
@@ -292,9 +292,9 @@ References: [ECMWF Parameter Database](https://codes.ecmwf.int/grib/param-db/), 
 
 The GRIB2 archive and the Anemoi datasets built from it are for the project's internal use and are not distributed. This repository holds the conversion code only.
 
-To cite the CHAPTER reanalysis:
+To cite CHAPTER:
 
-> Bernini, L., Lagasio, M., Milelli, M., Oberto, E., Parodi, A., Hachinger, S., Kranzlmüller, D., & Tartaglione, N. (2024). Convection-permitting dynamical downscaling of ERA5 for Europe and the Mediterranean basin. *Quarterly Journal of the Royal Meteorological Society*. https://doi.org/10.1002/qj.5014
+> Bernini, L., Lagasio, M., Milelli, M., Oberto, E., Parodi, A., Hachinger, S., Kranzlmüller, D., & Tartaglione, N. (2025). Convection-permitting dynamical downscaling of ERA5 for Europe and the Mediterranean basin. *Quarterly Journal of the Royal Meteorological Society*, 151(772). https://doi.org/10.1002/qj.5014
 
 ## Contact and licence
 
