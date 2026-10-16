@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues in `meteocima/CHAPTER`. Use the `gh` CLI for all operations.
+Issues and specs for this repo live as GitHub issues in `meteocima/CHAPTER_LAM_AI`. Use the `gh` CLI for all operations.
 
 ## Environment note (Leonardo)
 
@@ -14,7 +14,7 @@ no OS keyring for `gh` to fall back on. The file is `0600` under a `0700` home w
 extended ACLs, so only `lmonaco0` can read it. Never export it as `GH_TOKEN` inside a
 SLURM job script: job output lands in `/leonardo_work`.
 
-`meteocima/CHAPTER` is a **PUBLIC** repo. Everything filed as an issue is world-readable,
+`meteocima/CHAPTER_LAM_AI` is a **PUBLIC** repo. Everything filed as an issue is world-readable,
 so keep infrastructure detail (keys, account names, internal hostnames) out of issue bodies.
 
 If `gh auth status` reports no host, say so and stop rather than falling back to local

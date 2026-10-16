@@ -10,18 +10,18 @@ the harness cannot make are `tools/audit/f2_near_surface.py` and
 `f2_profile.py`, output beside the rows.
 
 **Nine of the ten are verified.** The tenth, `2r`, is wrong — but that was found
-in family 1 and is [#40](https://github.com/meteocima/CHAPTER/issues/40); what
+in family 1 and is [#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40); what
 this family adds is the measurement of it over the whole sample. Two smaller
-findings are filed: [#42](https://github.com/meteocima/CHAPTER/issues/42) and
-[#43](https://github.com/meteocima/CHAPTER/issues/43).
+findings are filed: [#42](https://github.com/meteocima/CHAPTER_LAM_AI/issues/42) and
+[#43](https://github.com/meteocima/CHAPTER_LAM_AI/issues/43).
 
 ## The table
 
 | variable | paramId | leg A | leg B | leg C (ERA5) | verdict |
 |---|---|---|---|---|---|
 | `2t` | 167 | ok | **exact** | bias −0.57 K, corr 0.976 | **verified** |
-| `2d` | 168 | ok | not available | bias **−0.02 K**, corr 0.957 | **verified**, note → [#42](https://github.com/meteocima/CHAPTER/issues/42) |
-| `2r` | 260242 | ok | not available | ERA5 does not carry it | **wrong** ([#40](https://github.com/meteocima/CHAPTER/issues/40)) |
+| `2d` | 168 | ok | not available | bias **−0.02 K**, corr 0.957 | **verified**, note → [#42](https://github.com/meteocima/CHAPTER_LAM_AI/issues/42) |
+| `2r` | 260242 | ok | not available | ERA5 does not carry it | **wrong** ([#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40)) |
 | `10u` | 165 | ok | **exact** | bias +0.099 m/s, corr 0.945 | **verified** |
 | `10v` | 166 | ok | **exact** | bias −0.002 m/s, corr 0.944 | **verified** |
 | `100u` | 228246 | ok | not available | bias +0.104 m/s, corr 0.945 | **verified** |
@@ -39,7 +39,7 @@ are K, m s⁻¹, % and s⁻¹ as declared.
 the whole domain and **−2.376** over land, while its bias is +0.196 m/s and its
 correlation 0.921. The wind components have means near zero, so a ratio of means
 is not a measurement. Filed as
-[#43](https://github.com/meteocima/CHAPTER/issues/43).
+[#43](https://github.com/meteocima/CHAPTER_LAM_AI/issues/43).
 
 ## The family is built two ways, and that is the thing to check
 
@@ -142,21 +142,21 @@ under this paramId would sit 273 K away. Verified.
 The same number at every timestep, and every violating point saturated: it is the
 dewpoint inversion in wrf-python overshooting at exactly saturation, not noise. A
 dewpoint above its own temperature is impossible whatever the size, so it is
-recorded as [#42](https://github.com/meteocima/CHAPTER/issues/42), with the
+recorded as [#42](https://github.com/meteocima/CHAPTER_LAM_AI/issues/42), with the
 recommendation to document rather than clip — clipping would cost the exact
 consistency with `Q2` measured below.
 
 ## `2r` over the whole sample, with the definition it should have had
 
 Family 1 established that `r` and `2r` are humidity over **liquid water, clipped
-at 100** ([#40](https://github.com/meteocima/CHAPTER/issues/40)). For `r` on
+at 100** ([#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40)). For `r` on
 pressure levels the phase is wrong too — ECMWF defines paramId 157 over the mixed
 phase, measured. **For `2r` it is not**: decided 2026-09-22, `2r` stays over
 liquid water with `2t` and `2d`, because that is the WMO convention for a
 screen-level humidity at every temperature, because ERA5 publishes no 2 m
 relative humidity at all so there is no ECMWF practice to follow, and because
 nothing joins 2 m to the 1000 hPa level anyway
-([#44](https://github.com/meteocima/CHAPTER/issues/44)). **So `2r`'s only defect
+([#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44)). **So `2r`'s only defect
 is the clip.**
 
 Leg D therefore makes the reconstruction a user makes from the two neighbours,
@@ -226,7 +226,7 @@ documentation.
 ERA5 does not publish it, and the crosswalk's reason — "no vertical speed shear
 at any level" — is a claim about ERA5's catalogue rather than about what ECMWF
 defines, which is the distinction
-[#17](https://github.com/meteocima/CHAPTER/issues/17) found four reasons failing.
+[#17](https://github.com/meteocima/CHAPTER_LAM_AI/issues/17) found four reasons failing.
 It passes.
 
 ## `200u`/`200v`: the weakest verdict in the family, and it says so
@@ -245,12 +245,12 @@ the field cannot be.**
 
 ## What this family contaminates
 
-- **Nothing new.** `2r`'s defect is [#40](https://github.com/meteocima/CHAPTER/issues/40),
+- **Nothing new.** `2r`'s defect is [#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40),
   already filed by family 1 and already reflected in the harness.
-- **[#43](https://github.com/meteocima/CHAPTER/issues/43) is about the instrument**,
+- **[#43](https://github.com/meteocima/CHAPTER_LAM_AI/issues/43) is about the instrument**,
   not the archive: the remaining families (3, 4, 5, 8) will meet the same
   misleading ratio column and should read the rows, not the summary.
-- **Family 8 ([#26](https://github.com/meteocima/CHAPTER/issues/26))** can reuse
+- **Family 8 ([#26](https://github.com/meteocima/CHAPTER_LAM_AI/issues/26))** can reuse
   two results rather than re-measure them: the lowest mass level is at 21–28 m
   above ground at every timestep of the sample, which bears on `zust` and the
   stress components, and `2t`/`10u`/`10v` are exact under leg B, which bears on

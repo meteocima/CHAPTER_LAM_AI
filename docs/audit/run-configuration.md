@@ -579,14 +579,14 @@ HAIL_MAXK1   m          MAX HAIL DIAMETER K=1
 is reset at every history write, and this section originally concluded that the one-hour
 window "is now settled from the configuration, and it generalises" to all seven.
 
-**Corrected 2026-09-25 by [audit family 5](https://github.com/meteocima/CHAPTER/issues/23):
+**Corrected 2026-09-25 by [audit family 5](https://github.com/meteocima/CHAPTER_LAM_AI/issues/23):
 the configuration states WRF's intent, and the intent is missed on 12 per cent of hours.**
 Measured on six whole days at hourly resolution, `WSPD10MAX` was NOT reset at **17 of 138**
 history writes — zero points below the previous hour, hundreds of thousands bit-for-bit equal
 to it — most often on convective summer days (9 of 23 on 2024-08-15, 0 on both winter days).
 The `10fg` encoding (reference time H-1, step `0-1`, `stepType=max`,
 `typeOfStatisticalProcessing=2`) is confirmed and correct; what is not reliable is that the
-*field* fills that window. See [#49](https://github.com/meteocima/CHAPTER/issues/49).
+*field* fills that window. See [#49](https://github.com/meteocima/CHAPTER_LAM_AI/issues/49).
 
 So the generalisation must be read the other way round: **any future use of the other six
 must test the window rather than inherit it.** None of the six is published today.
@@ -657,7 +657,7 @@ independent information. It is a table value wearing a field's clothes.
 `rdmaxalb = .true. ! use snow albedo from geogrid; false means using values from table`.
 So there is **no seasonal cycle from observation**, while `SNOALB` does come from geogrid.
 
-**Corrected 2026-09-28 by [#37](https://github.com/meteocima/CHAPTER/issues/37): the table
+**Corrected 2026-09-28 by [#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37): the table
 named here was the wrong one.** `ALBBCK` is not `VEGPARM.TBL`'s `MODI-RUC` `ALBEDO` column —
 that gives 0.18 for croplands, and **0.18 never occurs anywhere in the archive**. It is
 `LANDUSE.TBL`'s `MODIFIED_IGBP_MODIS_NOAH` section, which carries a WINTER and a SUMMER value
@@ -696,7 +696,7 @@ files**. Bears directly on `al`, which the archive writes in every message.
 (max/min/mean/std)`. There is no `T2MAX`/`T2MIN`, no `U10MAX`, no daily statistics of any
 screen-level field. **ERA5's `mx2t` and `mn2t` cannot be produced from these wrfout**, and
 this is a configuration fact, not a conversion limitation. Recorded in
-`MISSING_VARIABLES.md` §4 on 2026-09-28 ([#30](https://github.com/meteocima/CHAPTER/issues/30)). (The hourly maxima of §e are a
+`MISSING_VARIABLES.md` §4 on 2026-09-28 ([#30](https://github.com/meteocima/CHAPTER_LAM_AI/issues/30)). (The hourly maxima of §e are a
 different, smaller set.)
 
 ### l. `p_top_requested = 5000` — the archive's top pressure level is the model lid

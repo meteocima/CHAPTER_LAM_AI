@@ -1,6 +1,6 @@
 # Family 4: radiation
 
-> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER/issues/71)
+> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER_LAM_AI/issues/71)
 > (2026-10-07) every accumulation was summed from 00Z of the day, with zero at 00Z; since then
 > each covers the hour ending at its timestep, 00Z included. Statements below about accumulations
 > "since 00Z" or "zero at 00Z" describe the archive this audit was run on, not the current one.
@@ -15,7 +15,7 @@ and `f4_decisive.py`, output beside the rows.
 
 **All thirteen are verified.** One finding is filed and it is not a defect but an
 undocumented property of the run:
-[#45](https://github.com/meteocima/CHAPTER/issues/45).
+[#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45).
 
 This is the first family where **leg B is exact for every member** — four are
 wrfout accumulators read straight through, one is `ACSWDNT`, and the other eight
@@ -26,8 +26,8 @@ accumulation machinery, on which nineteen accumulators in the archive depend.
 
 | variable | paramId | leg A | leg B | leg C (ours/ERA5) | verdict |
 |---|---|---|---|---|---|
-| `ssrd` | 169 | ok | **exact**, `ACSWDNB` | 1.136, corr 0.960 | **verified**, bias → [#45](https://github.com/meteocima/CHAPTER/issues/45) |
-| `ssrdc` | 228129 | ok | **exact**, `ACSWDNBC` | **1.085**, corr 0.993 | **verified**, bias → [#45](https://github.com/meteocima/CHAPTER/issues/45) |
+| `ssrd` | 169 | ok | **exact**, `ACSWDNB` | 1.136, corr 0.960 | **verified**, bias → [#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45) |
+| `ssrdc` | 228129 | ok | **exact**, `ACSWDNBC` | **1.085**, corr 0.993 | **verified**, bias → [#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45) |
 | `ssr` | 176 | ok | **exact**, identity | 1.178, corr 0.925 | **verified** |
 | `ssrc` | 210 | ok | **exact**, identity | 1.116, corr 0.933 | **verified** |
 | `strd` | 175 | ok | **exact**, `ACLWDNB` | 0.989, corr 0.927 | **verified** |
@@ -131,7 +131,7 @@ series and WRF's own orbital code, and this check cannot resolve it further.
 Two things were tested along the way and are worth recording so they are not
 retried. The model integrates the shortwave as a **step function** —
 `swint_opt = 0` with `radt = 5`, settled by
-[#12](https://github.com/meteocima/CHAPTER/issues/12) — so the quadrature was
+[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12) — so the quadrature was
 repeated with a left-endpoint rule instead of a midpoint one; it moves the answer
 by about 1 per cent and does not remove the date dependence. And the equation of
 time **must be kept**: dropping it widens the spatial IQR at five of the six
@@ -190,7 +190,7 @@ Leg C, decomposed:
 solar to the surface than ERA5.** The thermal fields agree to about 1 per cent,
 which is the control that makes the attribution credible.
 
-[#12](https://github.com/meteocima/CHAPTER/issues/12) established from the
+[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12) established from the
 configuration that RRTMG ran with **no aerosol**. ERA5 carries the Tegen
 climatology, and over Europe, the Mediterranean and the Saharan margin an optical
 depth of 0.1 to 0.2 is the right order for 8.5 per cent. The further 5 points in
@@ -198,7 +198,7 @@ the all-sky figure are a cloud difference on top of it.
 
 It is a property of the run and cannot be removed after the fact, but a user of
 this archive for solar resource or as training data against observations needs to
-know. Filed as [#45](https://github.com/meteocima/CHAPTER/issues/45).
+know. Filed as [#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45).
 
 ## Two notes, neither a defect
 
@@ -219,13 +219,13 @@ not a missing input.
 
 - **Nothing.** No other family's variables are touched and no ticket is
   invalidated.
-- **Family 5 ([#23](https://github.com/meteocima/CHAPTER/issues/23)) inherits the
+- **Family 5 ([#23](https://github.com/meteocima/CHAPTER_LAM_AI/issues/23)) inherits the
   machinery verdict**: the PDT-8 encoding, the 00Z reference, the exact zero at
   00Z and the sidecar subtraction are verified here on thirteen fields and need
   not be re-established for the water-cycle six. What family 5 still owns is
   `10fg`, whose time convention is different, and the `tp` cross-check against
   `PREC_ACC_NC`.
-- **Family 8 ([#26](https://github.com/meteocima/CHAPTER/issues/26))** should note
+- **Family 8 ([#26](https://github.com/meteocima/CHAPTER_LAM_AI/issues/26))** should note
   that `skt` is inverted from `LWUPB` and `LWUPBC`, whose instantaneous
   clear-sky/all-sky consistency is measured here: they disagree by at most
   0.11 W/m² on 0.002 per cent of points, so the emissivity identity that divides

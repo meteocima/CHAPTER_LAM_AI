@@ -1,7 +1,7 @@
 # The re-verification gate
 
 Run 2026-09-25, after the six repairs of the go/no-go
-([#27](https://github.com/meteocima/CHAPTER/issues/27)) were merged. This is the
+([#27](https://github.com/meteocima/CHAPTER_LAM_AI/issues/27)) were merged. This is the
 gate that issue made a condition of the release, and this document is its
 result.
 
@@ -37,7 +37,7 @@ and not memory:
 
 ## What moved
 
-### Family 1 — `r` ([#40](https://github.com/meteocima/CHAPTER/issues/40))
+### Family 1 — `r` ([#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40))
 
 | level | ratio to ERA5, before | after | points pinned at exactly 100 |
 |---|---|---|---|
@@ -51,7 +51,7 @@ and not memory:
 The family document predicted "0.945 to 1.058 at every level" from the
 mixed-phase recomputation. Measured on the rebuilt archive: **0.945 to 1.049**.
 
-### Family 3 — the column integrals ([#46](https://github.com/meteocima/CHAPTER/issues/46))
+### Family 3 — the column integrals ([#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46))
 
 | `tcwv`, 2024-01-15T12 | before | after |
 |---|---|---|
@@ -71,7 +71,7 @@ Closure, `tcw` minus its five components against the graupel column, worst point
 | 2024-07-15T12 | 1.431 | **7.1e-06** |
 | 2024-10-15T12 | 1.581 | **7.0e-06** |
 
-### Family 5 — `sf` ([#52](https://github.com/meteocima/CHAPTER/issues/52))
+### Family 5 — `sf` ([#52](https://github.com/meteocima/CHAPTER_LAM_AI/issues/52))
 
 | 2024-02-15T12 | before | after |
 |---|---|---|
@@ -79,7 +79,7 @@ Closure, `tcw` minus its five components against the graupel column, worst point
 | points above 1e-3 mm | **138 026** | **0** |
 | `sf` max | 34.57 mm | 46.35 mm |
 
-### Family 6 — the soil columns ([#38](https://github.com/meteocima/CHAPTER/issues/38))
+### Family 6 — the soil columns ([#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38))
 
 | | before | after |
 |---|---|---|
@@ -90,7 +90,7 @@ Closure, `tcw` minus its five components against the graupel column, worst point
 
 The 3 225 difference in the land count is exactly the sea ice of that timestep.
 
-### Family 7 — `sst`, `cl`, `dl` ([#36](https://github.com/meteocima/CHAPTER/issues/36))
+### Family 7 — `sst`, `cl`, `dl` ([#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36))
 
 | | 2024-01-15T12 | 2024-02-15T12 | 2025-02-15T12 |
 |---|---|---|---|
@@ -105,7 +105,7 @@ The strongest single line: **the coldest published `sst` on 2024-01-15 is now at
 ice. Before the repair it was a cell with `cl` = 0.5 and **no ice at all**:
 inland water. The field's own extreme moved from an artefact to a physical one.
 
-### Family 8 — `mucin` ([#54](https://github.com/meteocima/CHAPTER/issues/54))
+### Family 8 — `mucin` ([#54](https://github.com/meteocima/CHAPTER_LAM_AI/issues/54))
 
 | timestep | fill fraction before | **masked** fraction after | zeros among published | `mucin` max |
 |---|---|---|---|---|
@@ -133,7 +133,7 @@ the gaps did.
 > **Amended 2026-09-29: `skt` no longer belongs in that list.** It was a negative
 > control of this gate and it held — nothing the six repairs did moved it. But on
 > 2026-09-29 `EMISS_SNOWC_FULL` was changed from 0.01 to 0.015 (`1c3c6f2`,
-> [#55](https://github.com/meteocima/CHAPTER/issues/55)) after the snow threshold
+> [#55](https://github.com/meteocima/CHAPTER_LAM_AI/issues/55)) after the snow threshold
 > was swept over all 34 timesteps, so the converter that ships is no longer the
 > one this gate measured, and `skt` **will** differ from the values recorded here
 > by about 0.05 K RMSE over snow-covered land.
@@ -143,7 +143,7 @@ the gaps did.
 > that today's converter leaves `skt` where this run found it. The 476 GRIBs of
 > the 2026-09-28 trial tranche carry the old constant and are to be deleted
 > before the campaign regenerates them
-> ([#59](https://github.com/meteocima/CHAPTER/issues/59)).
+> ([#59](https://github.com/meteocima/CHAPTER_LAM_AI/issues/59)).
 >
 > This amendment exists because the rule learned the same morning — a repair
 > silently invalidates the documents that describe the old behaviour — was broken

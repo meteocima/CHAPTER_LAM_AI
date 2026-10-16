@@ -16,11 +16,11 @@ down enough to check the answer a second way.
 
 **Eight of the nine are verified. `mucin` is not**: on 71 to 96 per cent of the
 domain it is the literal constant 0, and 0 there means the opposite of the truth
-([#54](https://github.com/meteocima/CHAPTER/issues/54)). Three further findings
+([#54](https://github.com/meteocima/CHAPTER_LAM_AI/issues/54)). Three further findings
 are properties of the run or of definitions, not conversion defects
-([#55](https://github.com/meteocima/CHAPTER/issues/55),
-[#56](https://github.com/meteocima/CHAPTER/issues/56),
-[#57](https://github.com/meteocima/CHAPTER/issues/57)).
+([#55](https://github.com/meteocima/CHAPTER_LAM_AI/issues/55),
+[#56](https://github.com/meteocima/CHAPTER_LAM_AI/issues/56),
+[#57](https://github.com/meteocima/CHAPTER_LAM_AI/issues/57)).
 
 ## The table
 
@@ -28,13 +28,13 @@ are properties of the run or of definitions, not conversion defects
 |---|---|---|---|---|---|
 | `sp` | 134 | ok | **exact**, `PSFC` | 1.000–1.001, corr 0.99 | **verified** |
 | `msl` | 151 | ok | **agrees with `sp` at sea level to 25–34 Pa (p99)** | 1.000–1.001, corr 0.99 | **verified** |
-| `skt` | 235 | ok | **0.0005 K RMSE against SST over water** | sea **+0.01 K**, land **−1.64 K**, corr 0.98 | **verified**, → [#55](https://github.com/meteocima/CHAPTER/issues/55), [#57](https://github.com/meteocima/CHAPTER/issues/57) |
+| `skt` | 235 | ok | **0.0005 K RMSE against SST over water** | sea **+0.01 K**, land **−1.64 K**, corr 0.98 | **verified**, → [#55](https://github.com/meteocima/CHAPTER_LAM_AI/issues/55), [#57](https://github.com/meteocima/CHAPTER_LAM_AI/issues/57) |
 | `iews` | 229 | ok | **identity**, ρu\*² to 1.8e-6 | corr **+0.80 … +0.89**, sign 0.87–0.92 | **verified** |
 | `inss` | 230 | ok | **identity**, ρu\*² to 1.8e-6 | corr **+0.82 … +0.89**, sign 0.87–0.92 | **verified** |
-| `zust` | 228003 | ok | **exact**, `UST` | sea 1.08–1.12, **land 1.62–2.06** | **verified**, → [#56](https://github.com/meteocima/CHAPTER/issues/56) |
-| `fsr` | 244 | ok | **exact**, `ZNT` | **land 0.32–0.48 (median)**, sea 1.5–1.9 | **verified**, → [#56](https://github.com/meteocima/CHAPTER/issues/56) |
+| `zust` | 228003 | ok | **exact**, `UST` | sea 1.08–1.12, **land 1.62–2.06** | **verified**, → [#56](https://github.com/meteocima/CHAPTER_LAM_AI/issues/56) |
+| `fsr` | 244 | ok | **exact**, `ZNT` | **land 0.32–0.48 (median)**, sea 1.5–1.9 | **verified**, → [#56](https://github.com/meteocima/CHAPTER_LAM_AI/issues/56) |
 | `mucape` | 228235 | ok | parcel fixed by the Fortran | 0.52–2.05 where ERA5 active | **verified** |
-| `mucin` | 228236 | ok | parcel fixed by the Fortran | **0.03–0.24, and 0 against 25–265 J/kg where filled** | **wrong** → [#54](https://github.com/meteocima/CHAPTER/issues/54) |
+| `mucin` | 228236 | ok | parcel fixed by the Fortran | **0.03–0.24, and 0 against 25–265 J/kg where filled** | **wrong** → [#54](https://github.com/meteocima/CHAPTER_LAM_AI/issues/54) |
 
 No leg A failure, no bitmap, no missing point, at any of the 34 timesteps.
 
@@ -234,7 +234,7 @@ value per category — 0.70 m for the forest classes, 0.15 for 8 and 9, 0.065 fo
 barren, **1.00 m on exactly 19 867 points, all of them category 13, urban** —
 and a floor of 0.011 m where snow covers the surface. Nothing is capped or
 clipped; the field is what MODIS and `LANDUSE.TBL` say.
-[#56](https://github.com/meteocima/CHAPTER/issues/56).
+[#56](https://github.com/meteocima/CHAPTER_LAM_AI/issues/56).
 
 ## The finding: `mucin` is a constant on most of the domain
 
@@ -277,7 +277,7 @@ with correlation 0.24–0.75, which is parcel choice and 3 km spikiness, not a
 factor. `mucin` is never negative and is never non-zero where `mucape < 100` —
 both confirmed at every point of every timestep, so the construction is exactly
 what the code says.
-[#54](https://github.com/meteocima/CHAPTER/issues/54).
+[#54](https://github.com/meteocima/CHAPTER_LAM_AI/issues/54).
 
 ## The land skin temperature, and a tension with family 4
 
@@ -294,21 +294,21 @@ SST and both reanalyses see nearly the same one, so +0.01 K says the inversion
 and the encoding are not the cause of anything. The land bias is the run.
 
 It sits awkwardly against
-[#45](https://github.com/meteocima/CHAPTER/issues/45) and
-[#48](https://github.com/meteocima/CHAPTER/issues/48): we deliver **8.5 per cent
+[#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45) and
+[#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48): we deliver **8.5 per cent
 more clear-sky surface solar** than ERA5 and **22 per cent less cloud**, both of
 which put more energy into the land surface, and the land skin comes out
 **colder** at midday. Reconciling that needs the surface energy budget, and
 `HFX`, `LH` and the ground heat flux are the three fields this archive does not
 have (`MISSING_VARIABLES.md`). **It is recorded as an open tension, not
-explained.** [#57](https://github.com/meteocima/CHAPTER/issues/57).
+explained.** [#57](https://github.com/meteocima/CHAPTER_LAM_AI/issues/57).
 
 ## What this family contaminates
 
 - **Nothing in the other seven.** Every finding here is confined to its own
   variable: `mucin`'s fill is one message, `fsr`/`zust` are definitions, the
   `skt` numbers are a documentation correction.
-- **[#12](https://github.com/meteocima/CHAPTER/issues/12)'s emissivity work is
+- **[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12)'s emissivity work is
   confirmed, not corrected.** The measured table, the four categories that
   disagree with `EMISSMIN`, the 0.850 for barren and the snow switch all survive
   the wider sample. Only the accuracy *figures* attached to them were
@@ -332,12 +332,12 @@ explained.** [#57](https://github.com/meteocima/CHAPTER/issues/57).
 `skt` is inverted from the upward longwave, and the inversion needs the emissivity the model
 used. Everything about that emissivity was *read out of the run* — the per-category table is
 `VEGPARM.TBL`'s `MODI-RUC` `LEMI` column, confirmed 21 of 21
-([#28](https://github.com/meteocima/CHAPTER/issues/28)) — with **one exception**: the snow
+([#28](https://github.com/meteocima/CHAPTER_LAM_AI/issues/28)) — with **one exception**: the snow
 cover at which the emissivity switches to a flat 0.98. RUC's own rule lives in source that is
 not on disk, so the converter carried a threshold inferred from a summer-weighted sample,
 `SNOWC >= 0.01`.
 
-[#55](https://github.com/meteocima/CHAPTER/issues/55) reported that the switch fires early and
+[#55](https://github.com/meteocima/CHAPTER_LAM_AI/issues/55) reported that the switch fires early and
 suggested 0.02. It also contained what looked like a contradiction — "current 0.940" against
 "a plain switch at any single threshold 0.76–0.93" — when the converter's rule *is* a switch.
 It is not a contradiction: the shipping rule is a switch **with a linear blend below the

@@ -14,5 +14,5 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 Edit the right-hand column to match whatever vocabulary you actually use.
 
-All five labels exist in `meteocima/CHAPTER` as of 2026-09-18. `wontfix` is GitHub's own
+All five labels exist in `meteocima/CHAPTER_LAM_AI` as of 2026-09-18. `wontfix` is GitHub's own
 default label, reused rather than duplicated; the other four were created for these skills.

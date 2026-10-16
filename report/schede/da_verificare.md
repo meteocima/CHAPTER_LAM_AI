@@ -1,10 +1,10 @@
 # Da verificare
 
-Aggiornato il 2026-09-29. Le 541 voci [SENZA FONTE] delle tre schede sono state verificate due volte: (1) contro le 65 issue di `meteocima/CHAPTER` e `docs/audit/`; (2) le voci non trovate, contro fonti ufficiali online (ECMWF, WRF, MODIS), misure in sola lettura sui dati dell'archivio e la storia del repository. Dettaglio in `verifica/`. Quando le due verifiche danno esiti diversi, la voce sta sotto l'esito più severo e riporta entrambe.
+Aggiornato il 2026-09-29. Le 541 voci [SENZA FONTE] delle tre schede sono state verificate due volte: (1) contro le 65 issue di `meteocima/CHAPTER_LAM_AI` e `docs/audit/`; (2) le voci non trovate, contro fonti ufficiali online (ECMWF, WRF, MODIS), misure in sola lettura sui dati dell'archivio e la storia del repository. Dettaglio in `verifica/`. Quando le due verifiche danno esiti diversi, la voce sta sotto l'esito più severo e riporta entrambe.
 
 ## 0. Decisioni dell'utente e misure aggiunte (2026-09-29)
 
-- Citazioni: nel report si citano solo le issue che parlano dei GRIB (repository pubblico, github.com/meteocima/CHAPTER). Le altre issue e i file del repository servono da verifica e non si citano.
+- Citazioni: nel report si citano solo le issue che parlano dei GRIB (repository pubblico, github.com/meteocima/CHAPTER_LAM_AI). Le altre issue e i file del repository servono da verifica e non si citano.
 - Maschera degli arbusteti (`CHAPTER_VARIABLES` A120, A261; md r.157 "15.8 %" e r.387 "16.2 %"): si usa il dato più recente. Rimisurato sul sidecar statico in uso (`static_v1/chapter_static_d02.npz`, 2026-09-25 17:31): 124 672 celle con `tvl` mancante (coincide con `meta_tvl_masked_points` e con #25), su 778 381 celle con `cvl > 0` = 16,02 %. Per confronto: 12,91 % delle celle con `cvl > 0` o `cvh > 0`, 9,56 % delle 1 304 109 celle di terra. Né 15,8 % né 16,2 % si riproducono.
 
 - Ambito del report: CHAPTER in sé e la sua mappatura sullo schema ERA5, cioè cosa contengono i GRIB e come ogni campo è stato estratto in modo onesto. Fuori dal report: la richiesta originale di variabili, il progetto che l'ha fatta, la lista "richiesto/consegnato" (voci come `MISSING_VARIABLES` A013, N001-N005, A181 si scartano, non si verificano). Da `MISSING_VARIABLES` entra solo ciò che riguarda i limiti della mappatura: quali parametri ERA5 non si possono produrre da questi wrfout, e perché.
@@ -807,29 +807,29 @@ Aggiornato il 2026-09-29. Le 541 voci [SENZA FONTE] delle tre schede sono state 
 - CHAPTER_KNOWN_PROPERTIES.md R002 `MISSING_VARIABLES.md` (§intro, r.4; §1.3, r.153)
 - CHAPTER_KNOWN_PROPERTIES.md R003 `docs/audit/sample.md` (§intro, r.15; §Where, r.646)
 - CHAPTER_KNOWN_PROPERTIES.md R004 `docs/audit/re-verification.md` (§Which, r.40; §Where, r.656)
-- CHAPTER_KNOWN_PROPERTIES.md R005 [#45](https://github.com/meteocima/CHAPTER/issues/45) (§1.1, r.100)
-- CHAPTER_KNOWN_PROPERTIES.md R006 [#48](https://github.com/meteocima/CHAPTER/issues/48) (§1.2, r.131)
-- CHAPTER_KNOWN_PROPERTIES.md R007 [#57](https://github.com/meteocima/CHAPTER/issues/57) (§1.3, r.161)
-- CHAPTER_KNOWN_PROPERTIES.md R008 [#56](https://github.com/meteocima/CHAPTER/issues/56) (§2.1, r.186; §2.2, r.203)
-- CHAPTER_KNOWN_PROPERTIES.md R009 [#55](https://github.com/meteocima/CHAPTER/issues/55) (§2.3, r.225)
-- CHAPTER_KNOWN_PROPERTIES.md R010 [#40](https://github.com/meteocima/CHAPTER/issues/40) (§3.1, r.255; §3.2, r.269)
-- CHAPTER_KNOWN_PROPERTIES.md R011 [#44](https://github.com/meteocima/CHAPTER/issues/44) (§3.2, r.270; §4.1, r.320)
-- CHAPTER_KNOWN_PROPERTIES.md R012 [#42](https://github.com/meteocima/CHAPTER/issues/42) (§3.3, r.286)
-- CHAPTER_KNOWN_PROPERTIES.md R013 [#39](https://github.com/meteocima/CHAPTER/issues/39) (§4.2, r.336)
-- CHAPTER_KNOWN_PROPERTIES.md R014 [#50](https://github.com/meteocima/CHAPTER/issues/50) (§5.1, r.388)
-- CHAPTER_KNOWN_PROPERTIES.md R015 [#49](https://github.com/meteocima/CHAPTER/issues/49) (§5.2, r.422)
-- CHAPTER_KNOWN_PROPERTIES.md R016 [#51](https://github.com/meteocima/CHAPTER/issues/51) (§6.1, r.455)
-- CHAPTER_KNOWN_PROPERTIES.md R017 [#47](https://github.com/meteocima/CHAPTER/issues/47) (§6.2, r.482)
-- CHAPTER_KNOWN_PROPERTIES.md R018 [#34](https://github.com/meteocima/CHAPTER/issues/34), [#36](https://github.com/meteocima/CHAPTER/issues/36) and [#38](https://github.com/meteocima/CHAPTER/issues/38) (§7.1, r.526-528)
-- CHAPTER_KNOWN_PROPERTIES.md R019 [#54](https://github.com/meteocima/CHAPTER/issues/54) (§7.2, r.557)
-- CHAPTER_KNOWN_PROPERTIES.md R020 [#53](https://github.com/meteocima/CHAPTER/issues/53) (§8.1, r.576)
-- CHAPTER_KNOWN_PROPERTIES.md R021 [#37](https://github.com/meteocima/CHAPTER/issues/37) (§8.2, r.594; §8.3, r.608)
-- CHAPTER_KNOWN_PROPERTIES.md R022 [#35](https://github.com/meteocima/CHAPTER/issues/35) (§8.4, r.634)
+- CHAPTER_KNOWN_PROPERTIES.md R005 [#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45) (§1.1, r.100)
+- CHAPTER_KNOWN_PROPERTIES.md R006 [#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48) (§1.2, r.131)
+- CHAPTER_KNOWN_PROPERTIES.md R007 [#57](https://github.com/meteocima/CHAPTER_LAM_AI/issues/57) (§1.3, r.161)
+- CHAPTER_KNOWN_PROPERTIES.md R008 [#56](https://github.com/meteocima/CHAPTER_LAM_AI/issues/56) (§2.1, r.186; §2.2, r.203)
+- CHAPTER_KNOWN_PROPERTIES.md R009 [#55](https://github.com/meteocima/CHAPTER_LAM_AI/issues/55) (§2.3, r.225)
+- CHAPTER_KNOWN_PROPERTIES.md R010 [#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40) (§3.1, r.255; §3.2, r.269)
+- CHAPTER_KNOWN_PROPERTIES.md R011 [#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44) (§3.2, r.270; §4.1, r.320)
+- CHAPTER_KNOWN_PROPERTIES.md R012 [#42](https://github.com/meteocima/CHAPTER_LAM_AI/issues/42) (§3.3, r.286)
+- CHAPTER_KNOWN_PROPERTIES.md R013 [#39](https://github.com/meteocima/CHAPTER_LAM_AI/issues/39) (§4.2, r.336)
+- CHAPTER_KNOWN_PROPERTIES.md R014 [#50](https://github.com/meteocima/CHAPTER_LAM_AI/issues/50) (§5.1, r.388)
+- CHAPTER_KNOWN_PROPERTIES.md R015 [#49](https://github.com/meteocima/CHAPTER_LAM_AI/issues/49) (§5.2, r.422)
+- CHAPTER_KNOWN_PROPERTIES.md R016 [#51](https://github.com/meteocima/CHAPTER_LAM_AI/issues/51) (§6.1, r.455)
+- CHAPTER_KNOWN_PROPERTIES.md R017 [#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47) (§6.2, r.482)
+- CHAPTER_KNOWN_PROPERTIES.md R018 [#34](https://github.com/meteocima/CHAPTER_LAM_AI/issues/34), [#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36) and [#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) (§7.1, r.526-528)
+- CHAPTER_KNOWN_PROPERTIES.md R019 [#54](https://github.com/meteocima/CHAPTER_LAM_AI/issues/54) (§7.2, r.557)
+- CHAPTER_KNOWN_PROPERTIES.md R020 [#53](https://github.com/meteocima/CHAPTER_LAM_AI/issues/53) (§8.1, r.576)
+- CHAPTER_KNOWN_PROPERTIES.md R021 [#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37) (§8.2, r.594; §8.3, r.608)
+- CHAPTER_KNOWN_PROPERTIES.md R022 [#35](https://github.com/meteocima/CHAPTER_LAM_AI/issues/35) (§8.4, r.634)
 - CHAPTER_KNOWN_PROPERTIES.md R023 IFS Cy41r2's own equations (7.5, 7.6, 7.89, 7.90) (§3.1, r.243-244)
 - CHAPTER_KNOWN_PROPERTIES.md R024 the Tegen aerosol climatology (§1.1, r.77)
 - CHAPTER_KNOWN_PROPERTIES.md R025 a CAM ozone climatology (§1.1, r.76)
 - CHAPTER_KNOWN_PROPERTIES.md R026 the WMO screen convention (§3.1, r.247)
-- CHAPTER_KNOWN_PROPERTIES.md R027 `tools/audit/` of the [CHAPTER repository](https://github.com/meteocima/CHAPTER) (§Where, r.640-641)
+- CHAPTER_KNOWN_PROPERTIES.md R027 `tools/audit/` of the [CHAPTER repository](https://github.com/meteocima/CHAPTER_LAM_AI) (§Where, r.640-641)
 - CHAPTER_KNOWN_PROPERTIES.md R028 `docs/audit/harness.md` (§Where, r.647)
 - CHAPTER_KNOWN_PROPERTIES.md R029 `docs/audit/f1-pressure-levels.md` (§Where, r.648)
 - CHAPTER_KNOWN_PROPERTIES.md R030 `docs/audit/f2-near-surface.md` (§Where, r.649)

@@ -27,12 +27,12 @@ needed.
 | `tvl` | 29 | ok | exact | 71.7 % same class | **verified** |
 | `tvh` | 30 | ok | exact | 42.7 % same class, see below | **verified** |
 | `slt` | 43 | ok | exact | 68.7 % same class | **verified** |
-| `cl` | 26 | ok | exact | ratio 2.55, corr 0.31 | **wrong** ([#36](https://github.com/meteocima/CHAPTER/issues/36)) |
-| `dl` | 228007 | ok | exact | bias −208 m, corr −0.014 | **wrong** ([#36](https://github.com/meteocima/CHAPTER/issues/36)) |
-| `al` | 174 | ok | exact | ERA5 does not publish it | **verified, documented wrongly** ([#37](https://github.com/meteocima/CHAPTER/issues/37)) |
+| `cl` | 26 | ok | exact | ratio 2.55, corr 0.31 | **wrong** ([#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36)) |
+| `dl` | 228007 | ok | exact | bias −208 m, corr −0.014 | **wrong** ([#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36)) |
+| `al` | 174 | ok | exact | ERA5 does not publish it | **verified, documented wrongly** ([#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37)) |
 | `fal` | 243 | ok | not available | bias −0.010, corr 0.935 | **verified** |
-| `sst` | 34 | ok | exact | bias −0.065 K, corr 0.992 | **wrong** ([#36](https://github.com/meteocima/CHAPTER/issues/36)) |
-| `ci` | 31 | **1 failure** | exact | ratio 0.485 | **wrong** ([#34](https://github.com/meteocima/CHAPTER/issues/34)), and see below |
+| `sst` | 34 | ok | exact | bias −0.065 K, corr 0.992 | **wrong** ([#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36)) |
+| `ci` | 31 | **1 failure** | exact | ratio 0.485 | **wrong** ([#34](https://github.com/meteocima/CHAPTER_LAM_AI/issues/34)), and see below |
 
 ## Claim A: the seven static fields are invariant. Verified, to exactly zero
 
@@ -105,14 +105,14 @@ Off land, `al` is 0.08 on water — LANDUSE.TBL class 17, both seasons — and
 ### This corrects a closed ticket
 
 `docs/audit/run-configuration.md` §j, from
-[Read the run's configuration](https://github.com/meteocima/CHAPTER/issues/12),
+[Read the run's configuration](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12),
 says `ALBBCK` is "the `MODI-RUC` `ALBEDO` column by dominant category — no
 seasonal cycle from observation". The second half is true and the first is not:
 VEGPARM's `MODI-RUC` column gives 0.18 for croplands and 0.18 **never occurs in
 the archive**, while LANDUSE.TBL's 0.17 and 0.20 both do, on half a million
 points each. The source is LANDUSE.TBL, and the phrase "no seasonal cycle from
 observation" reads as "no seasonal cycle", which is how it got into `CLAUDE.md`.
-Filed as [#37](https://github.com/meteocima/CHAPTER/issues/37).
+Filed as [#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37).
 
 ## geo_em as an independent source, not the sidecar
 
@@ -187,7 +187,7 @@ The values are not wrong for what they are — the model's water skin temperatur
 over a frozen inland lake — they are wrong for the parameter they are published
 under.
 
-Filed together as [#36](https://github.com/meteocima/CHAPTER/issues/36): one
+Filed together as [#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36): one
 mask would fix all three.
 
 ### `sst` is otherwise exactly as claimed
@@ -199,7 +199,7 @@ identical**, `SST_UPDATE = 0` — and masked on exactly the 1 304 109 land point
 
 Two distinct values in the whole domain, 0 and 1, and the wrfout's `SEAICE` is
 the same two. That follows from `FRACTIONAL_SEAICE = 0`, already established in
-[#12](https://github.com/meteocima/CHAPTER/issues/12): the model knows only
+[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12): the model knows only
 whether a cell is ice. Published under paramId 31, *Sea ice area fraction*.
 
 At 3 km a binary cell is a defensible fraction and upscaling recovers a real
@@ -207,7 +207,7 @@ one, so this is not a value defect — but it explains the leg C ratio of 0.485
 without appeal to any error: our threshold discards every ERA5 cell whose ice
 fraction is below a half, and this domain reaches only 60 N, where the marginal
 ice zone is most of the ice there is. It is also the field of
-[#34](https://github.com/meteocima/CHAPTER/issues/34), written as zeros over
+[#34](https://github.com/meteocima/CHAPTER_LAM_AI/issues/34), written as zeros over
 land while `sst`, on the same mask, is bitmapped.
 
 ## What leg C can and cannot settle for this family
@@ -233,7 +233,7 @@ scales they merely happen to have similar magnitudes.
 
 What matters for a user is that the declaration lives in our documentation and
 in a `long_name` eccodes does not show: read the message, and it says *Slope of
-sub-gridscale orography*. Recorded in [#37](https://github.com/meteocima/CHAPTER/issues/37).
+sub-gridscale orography*. Recorded in [#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37).
 
 ### `tvh`'s 42.7 % is a land-cover difference, not a crosswalk error
 
@@ -285,13 +285,13 @@ everywhere.
 spectral albedos, `snow_albedo` and `fal` instead". That is a claim about what
 ERA5 *publishes*, not about what ECMWF *defines* — paramId 174 exists and is
 `Albedo (climatological)`. This is the distinction
-[#17](https://github.com/meteocima/CHAPTER/issues/17) found four reasons failing;
+[#17](https://github.com/meteocima/CHAPTER_LAM_AI/issues/17) found four reasons failing;
 this one passes it. The verdict rests on legs A and B and on the table above.
 
 ## What this family contaminates
 
-- **[#12](https://github.com/meteocima/CHAPTER/issues/12)'s reading of `ALBBCK`**
-  is wrong on the table it names. `docs/audit/run-configuration.md` §j, [#37](https://github.com/meteocima/CHAPTER/issues/37).
+- **[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12)'s reading of `ALBBCK`**
+  is wrong on the table it names. `docs/audit/run-configuration.md` §j, [#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37).
 - **No other family ticket.** `sst` and `ci` appear in family 7's ticket and not
   in family 8's, so nothing is measured twice — note that the harness's own
   `FAMILIES` table disagrees with the tickets and puts them in 8. The tickets
@@ -303,9 +303,9 @@ this one passes it. The verdict rests on legs A and B and on the table above.
 ## Repaired: one masking rule, and why the issue's own cure could not be used
 
 Applied 2026-09-25. The rule settled with the user across
-[#34](https://github.com/meteocima/CHAPTER/issues/34),
-[#36](https://github.com/meteocima/CHAPTER/issues/36) and
-[#38](https://github.com/meteocima/CHAPTER/issues/38) is:
+[#34](https://github.com/meteocima/CHAPTER_LAM_AI/issues/34),
+[#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36) and
+[#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) is:
 
 > **A point is masked where the ERA5 parameter is not defined there.**
 

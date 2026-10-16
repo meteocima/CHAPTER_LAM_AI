@@ -25,10 +25,10 @@ a mask one, and it is the same mask family 7 found.
 | `stl2` | 170 | ok | rebuilt here: **1.9e-6 K** | bias −0.53 K, corr 0.990 | **verified** |
 | `stl3` | 183 | ok | rebuilt here: **1.8e-6 K** | bias +0.05 K, corr 0.993 | **verified** |
 | `stl4` | 236 | ok | rebuilt here: **1.9e-6 K** | bias −1.42 K, corr 0.986 | **verified** |
-| `swvl1` | 39 | ok | rebuilt here: **3.0e-8** | bias +0.017, ratio 1.099 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER/issues/38) |
-| `swvl2` | 40 | ok | rebuilt here: **3.0e-8** | bias +0.009, ratio 1.049 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER/issues/38) |
-| `swvl3` | 41 | ok | rebuilt here: **3.0e-8** | bias +0.024, ratio 1.141 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER/issues/38) |
-| `swvl4` | 42 | ok | rebuilt here: **3.0e-8** | bias +0.003, ratio 1.014 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER/issues/38) |
+| `swvl1` | 39 | ok | rebuilt here: **3.0e-8** | bias +0.017, ratio 1.099 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) |
+| `swvl2` | 40 | ok | rebuilt here: **3.0e-8** | bias +0.009, ratio 1.049 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) |
+| `swvl3` | 41 | ok | rebuilt here: **3.0e-8** | bias +0.024, ratio 1.141 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) |
+| `swvl4` | 42 | ok | rebuilt here: **3.0e-8** | bias +0.003, ratio 1.014 | **verified**, mask → [#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) |
 | `rsn` | 33 | ok | rebuilt here | bias −1.20 kg/m³, corr 0.734 | **verified** |
 | `sd` | 141 | ok | exact | bias −2.9e-5 m, ratio 0.882 | **verified** |
 | `snowc` | 260038 | ok | exact | ERA5 single levels do not carry it | **verified** |
@@ -98,7 +98,7 @@ which weights the 5 cm node more heavily than the surface one.
 
 ### Which `SOILPARM.TBL`
 
-[#12](https://github.com/meteocima/CHAPTER/issues/12) settled that the
+[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12) settled that the
 `_Kishne_2017` file is never opened. Two things add to it here. The `STAS-RUC`
 blocks of the two files are **byte-identical**, so the choice is inert for the
 soil columns whichever is read — and the *data* identifies which block the model
@@ -139,8 +139,8 @@ ERA5 has no soil at all because its land-sea mask is permanent.
 The values are the model's own and masking them would discard what it
 integrated. But 1.000 m³/m³ is impossible for the soil type the same file
 declares, and it is 2.3 times that type's porosity. Filed as
-[#38](https://github.com/meteocima/CHAPTER/issues/38) — the same mask decision as
-[#36](https://github.com/meteocima/CHAPTER/issues/36) and to be taken with it.
+[#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) — the same mask decision as
+[#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36) and to be taken with it.
 
 The mask itself is otherwise exactly right: bitmapped in every message, missing
 on exactly the water points, and moving with the ice — 916 164 missing in July,
@@ -228,7 +228,7 @@ and outside what leg C can attribute.
 
 `snowc` has **no ERA5 single-level counterpart**, and the crosswalk says exactly
 that rather than claiming no parameter exists — the distinction
-[#17](https://github.com/meteocima/CHAPTER/issues/17) found four reasons failing.
+[#17](https://github.com/meteocima/CHAPTER_LAM_AI/issues/17) found four reasons failing.
 Worth one more line of precision: **ERA5-Land does publish paramId 260038**, we
 simply do not retrieve ERA5-Land. The verdict rests on legs A and B, and leg B is
 exact.
@@ -236,8 +236,8 @@ exact.
 ## What this family contaminates
 
 - **Nothing is invalidated.** No other family's variables are touched.
-- **[#38](https://github.com/meteocima/CHAPTER/issues/38) must be decided with
-  [#36](https://github.com/meteocima/CHAPTER/issues/36)**: both are the question
+- **[#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38) must be decided with
+  [#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36)**: both are the question
   of which water mask each field should carry, and two masks decided separately
   would be worse than either decision.
 - **Family 7's result is used, not re-measured**: that the hourly mask moves
@@ -246,8 +246,8 @@ exact.
 
 ## Repaired: the soil columns take geo_em's permanent land mask
 
-Applied 2026-09-25, option 1 of [#38](https://github.com/meteocima/CHAPTER/issues/38),
-decided with the user together with [#36](https://github.com/meteocima/CHAPTER/issues/36)
+Applied 2026-09-25, option 1 of [#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38),
+decided with the user together with [#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36)
 as that issue asked. One rule for the whole archive: *a point is masked where
 the ERA5 parameter is not defined there*, and ERA5 has no soil under sea ice
 because its land-sea mask does not move.

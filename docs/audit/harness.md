@@ -62,7 +62,7 @@ This row now reconstructs `2r` from the published `2t` and `2d`, **both over
 liquid water** — `ifs_humidity.py`, Buck constants from IFS Cy41r2
 Part IV Eq. 7.5. It reports **median 0.39 %RH, maximum 2.48** over the sample,
 and the residual is essentially the clip of
-[#40](https://github.com/meteocima/CHAPTER/issues/40) plus the dewpoint round
+[#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40) plus the dewpoint round
 trip. After #40 it should fall to the round trip alone, `2d` against `Q2` at
 3.6e-4 to 1.1e-2 relative in vapour pressure.
 
@@ -84,7 +84,7 @@ the definition it is written against, and that definition has to come from the
 authority, not from the library that produced the field.
 
 Related, and it cost this repo a wrong resolution in
-[#33](https://github.com/meteocima/CHAPTER/issues/33): **a clip cannot be seen in
+[#33](https://github.com/meteocima/CHAPTER_LAM_AI/issues/33): **a clip cannot be seen in
 the packed maxima.** A value pinned at exactly 100 comes back from 24-bit CCSDS
 packing scattered by a few 1e-6, indistinguishable from float noise on a ratio
 reaching 1. Only recomputing from the source field tells them apart.
@@ -141,7 +141,7 @@ Three kinds of leg B, and the classification is itself a deliverable:
   harness, stated rather than hidden.
 
 **The column integrals were in that last list and did not belong there.**
-[Audit family 3](https://github.com/meteocima/CHAPTER/issues/21) found leg B for
+[Audit family 3](https://github.com/meteocima/CHAPTER_LAM_AI/issues/21) found leg B for
 all six of `tcw`, `tcwv`, `tclw`, `tciw`, `tcrw`, `tcsw`. WRF integrates on a
 **dry-mass** vertical coordinate, so the column water of a species is not an
 integral to be approximated but the weighted sum
@@ -149,7 +149,7 @@ integral to be approximated but the weighted sum
 three wrfout fields (`MU`, `MUB`, `DNW`) the converter never opens. A second
 opinion, not a copy, and an exact one: it showed the converter's pressure
 quadrature to be 3 to 8 per cent off
-([#46](https://github.com/meteocima/CHAPTER/issues/46)), which legs A and C
+([#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46)), which legs A and C
 could not have called a defect. The lesson generalises — **a field that is a
 vertical sum has a leg B whatever the harness says** — and the rows still read
 `none` only because the measurement lives in `tools/audit/f3_columns.py`,
@@ -255,7 +255,7 @@ rows.
 
 Across the whole sample there are **34 leg A failures and they are all the same
 one** — `ci` carrying no bitmap, at every timestep, which is
-[issue #34](https://github.com/meteocima/CHAPTER/issues/34).
+[issue #34](https://github.com/meteocima/CHAPTER_LAM_AI/issues/34).
 
 ## Regions
 
@@ -315,7 +315,7 @@ per-row ratios**, so a single row whose ERA5 mean sat near zero sent its own rat
 to infinity and carried the average with it: `crwc` read **756.2**, `cc` read
 **5.986**, and three of the eight families had to spend a paragraph telling the
 reader to ignore a number the instrument had printed
-([#43](https://github.com/meteocima/CHAPTER/issues/43)).
+([#43](https://github.com/meteocima/CHAPTER_LAM_AI/issues/43)).
 
 Three changes, none of which touches a stored measurement — the rows always
 carried `ours_mean`, `era5_mean`, `bias`, `rmse`, `corr` per region and per level,

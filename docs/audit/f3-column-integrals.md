@@ -1,6 +1,6 @@
 # Family 3: column integrals and cloud cover
 
-> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER/issues/71)
+> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER_LAM_AI/issues/71)
 > (2026-10-07) every accumulation was summed from 00Z of the day, with zero at 00Z; since then
 > each covers the hour ending at its timestep, 00Z included. Statements below about accumulations
 > "since 00Z" or "zero at 00Z" describe the archive this audit was run on, not the current one.
@@ -16,12 +16,12 @@ as `f3_columns.json`, `f3_lccdiff.json` and `f3_legc_exact.json`.
 **The four cloud covers are verified. The six column integrals are wrong by a
 measurable factor** — between 3 and 8 per cent, always in the same direction for
 water vapour — and the defect is the quadrature, not the physics:
-[#46](https://github.com/meteocima/CHAPTER/issues/46). A second finding concerns
-what `tcw` is the sum of ([#47](https://github.com/meteocima/CHAPTER/issues/47)),
+[#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46). A second finding concerns
+what `tcw` is the sum of ([#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47)),
 and a third is not a conversion defect at all but a property of the run that no
 document states: **we carry 22 per cent less total cloud than ERA5 and 39 per
-cent less high cloud** ([#48](https://github.com/meteocima/CHAPTER/issues/48)),
-which is the piece [#45](https://github.com/meteocima/CHAPTER/issues/45) could
+cent less high cloud** ([#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48)),
+which is the piece [#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45) could
 not measure.
 
 ## The harness said leg B did not exist here. It was wrong.
@@ -66,16 +66,16 @@ reproduces the model's own `PSFC` to a mean of **0.45 to 1.9 Pa** out of
 
 | variable | paramId | leg A | leg B (exact dry mass) | leg C (ours/ERA5) | verdict |
 |---|---|---|---|---|---|
-| `tcwv` | 137 | ok | **+4.5 % to +5.1 %** | 1.063 | **wrong** → [#46](https://github.com/meteocima/CHAPTER/issues/46) |
-| `tcw` | 136 | ok | **+4.5 % to +5.1 %** | 1.062 | **wrong** → [#46](https://github.com/meteocima/CHAPTER/issues/46), [#47](https://github.com/meteocima/CHAPTER/issues/47) |
-| `tclw` | 78 | ok | **+3.3 % to +5.8 %** | 0.748 | **wrong** → [#46](https://github.com/meteocima/CHAPTER/issues/46) |
-| `tcrw` | 228089 | ok | **+3.4 % to +7.8 %** | 2.71 | **wrong** → [#46](https://github.com/meteocima/CHAPTER/issues/46) |
-| `tciw` | 79 | ok | **−3.3 % to +0.9 %** | 1.109 | **wrong** → [#46](https://github.com/meteocima/CHAPTER/issues/46) |
-| `tcsw` | 228090 | ok | **−3.6 % to +2.9 %** | 0.816 | **wrong** → [#46](https://github.com/meteocima/CHAPTER/issues/46) |
-| `tcc` | 164 | ok | bounds hold, 0 violations | 0.783 | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER/issues/48) |
-| `lcc` | 186 | ok | recomputed, ≤2 points differ | 0.862 | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER/issues/48) |
-| `mcc` | 187 | ok | recomputed to 3e-7 | 0.786 | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER/issues/48) |
-| `hcc` | 188 | ok | recomputed to 3e-7 | **0.610** | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER/issues/48) |
+| `tcwv` | 137 | ok | **+4.5 % to +5.1 %** | 1.063 | **wrong** → [#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46) |
+| `tcw` | 136 | ok | **+4.5 % to +5.1 %** | 1.062 | **wrong** → [#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46), [#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47) |
+| `tclw` | 78 | ok | **+3.3 % to +5.8 %** | 0.748 | **wrong** → [#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46) |
+| `tcrw` | 228089 | ok | **+3.4 % to +7.8 %** | 2.71 | **wrong** → [#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46) |
+| `tciw` | 79 | ok | **−3.3 % to +0.9 %** | 1.109 | **wrong** → [#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46) |
+| `tcsw` | 228090 | ok | **−3.6 % to +2.9 %** | 0.816 | **wrong** → [#46](https://github.com/meteocima/CHAPTER_LAM_AI/issues/46) |
+| `tcc` | 164 | ok | bounds hold, 0 violations | 0.783 | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48) |
+| `lcc` | 186 | ok | recomputed, ≤2 points differ | 0.862 | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48) |
+| `mcc` | 187 | ok | recomputed to 3e-7 | 0.786 | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48) |
+| `hcc` | 188 | ok | recomputed to 3e-7 | **0.610** | **verified**, deficit → [#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48) |
 
 No leg A failure, no bitmap, no missing point, at any of the 34 timesteps. The
 cloud covers never leave `[0, 1]` and the water columns are never negative.
@@ -221,7 +221,7 @@ That the archive keeps graupel inside `tcw` is a recorded decision
 be published separately under an ERA5 name"). What is not recorded anywhere a
 user would look is that this makes the published `tcw` differ from its own
 ECMWF definition, and by how much.
-[#47](https://github.com/meteocima/CHAPTER/issues/47).
+[#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47).
 
 **A second, smaller inconsistency in the same block.** The five component
 columns clip negative mixing ratios (`np.maximum(gv(name).values, 0.0)` — the
@@ -327,8 +327,8 @@ and then averaged to 31 km, while ERA5's is overlapped on an already-smooth
 same 2–4 per cent overlap span, so it cannot carry 22 per cent either; it is
 recorded so the number is not quoted as if it were all model error.
 
-Filed as [#48](https://github.com/meteocima/CHAPTER/issues/48), and it closes a
-loose end in family 4. [#45](https://github.com/meteocima/CHAPTER/issues/45)
+Filed as [#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48), and it closes a
+loose end in family 4. [#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45)
 measured surface downward solar at **1.085 of ERA5 under clear sky and 1.136
 all-sky**, and attributed the extra five points to "a difference in cloudiness
 above" with no number attached. This is the number. The two are one story — no
@@ -353,16 +353,16 @@ mass-level pressure differences lives in one block of
 `convert_to_pressure_levels.py` and feeds only these six messages. Checked
 against the other families explicitly:
 
-- **Family 1** ([#19](https://github.com/meteocima/CHAPTER/issues/19), closed).
+- **Family 1** ([#19](https://github.com/meteocima/CHAPTER_LAM_AI/issues/19), closed).
   `q`, `clwc`, `ciwc`, `crwc`, `cswc` on pressure levels are point values
   interpolated by `to_levels`, not integrals. They share `moist_factor` with
   this family, and `moist_factor` is **not** where the error is — it is correct
   in both places. Family 1's verdicts stand.
-- **Family 5** ([#23](https://github.com/meteocima/CHAPTER/issues/23), open).
+- **Family 5** ([#23](https://github.com/meteocima/CHAPTER_LAM_AI/issues/23), open).
   `tp`, `sf`, `tirf`, `sro`, `ssro`, `ro` are WRF's own accumulators read
   through and referred to 00Z. No vertical integral anywhere. **Not affected**,
   and family 5 should not spend any of its session re-checking this.
-- **Family 8** ([#26](https://github.com/meteocima/CHAPTER/issues/26), open).
+- **Family 8** ([#26](https://github.com/meteocima/CHAPTER_LAM_AI/issues/26), open).
   `mucape`/`mucin` do their own vertical work inside wrf-python's Fortran
   kernel, on a different coordinate. Untouched by this.
 
@@ -436,5 +436,5 @@ repair: positive on vapour, cloud water and rain, negative on ice and snow.
 column to **7.1e-06 kg/m²**, on a timestep where graupel reaches 27.448 kg/m².
 That is the check that would have caught a species dropped or double-counted, and
 it now also confirms `tcw` uses the same zero clip as its components — which it
-did not before ([#47](https://github.com/meteocima/CHAPTER/issues/47)).
+did not before ([#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47)).
 

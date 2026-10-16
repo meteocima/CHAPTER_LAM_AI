@@ -124,7 +124,7 @@ tp    base=20240715T0600 step=5-6   valid=20240715T1200 stepType=accum
 forecast based at 06Z or 18Z, and encodes it as a one-hour step range against
 that base. Instantaneous fields carry base = validity and step 0.
 
-*Since [#71](https://github.com/meteocima/CHAPTER/issues/71) (2026-10-07) ours cover the
+*Since [#71](https://github.com/meteocima/CHAPTER_LAM_AI/issues/71) (2026-10-07) ours cover the
 same hour as ERA5's, 00Z included, and the harness compares hour to hour; what follows
 describes the 0-H archive this audit was run on.*
 

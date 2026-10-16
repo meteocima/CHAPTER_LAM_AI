@@ -41,13 +41,13 @@ masks and convective inhibition. They are listed in the repository's audit recor
 files from before the rebuild, replace them rather than reconciling them.
 
 **Every accumulated field covers the hour ending at its validity time**, 00 UTC included, as in
-ERA5 ([#70](https://github.com/meteocima/CHAPTER/issues/70)). Files written before 2026-10-07
+ERA5 ([#70](https://github.com/meteocima/CHAPTER_LAM_AI/issues/70)). Files written before 2026-10-07
 carry their accumulations summed from 00 UTC of the day instead, with nothing at 00 UTC: the hour
 23→00 UTC was in none of them. They are rewritten in place; a file is current when its
 accumulations' reference time is the previous hour.
 
 **The whole 00 UTC timestep comes from the previous day's run**, instantaneous fields and
-pressure levels included ([#72](https://github.com/meteocima/CHAPTER/issues/72)); see §8.5. 00 UTC
+pressure levels included ([#72](https://github.com/meteocima/CHAPTER_LAM_AI/issues/72)); see §8.5. 00 UTC
 files written before 15 October 2026 took their instantaneous fields from
 the next run, six hours into its spin-up. They are rewritten in place, and nothing inside a file
 tells the two apart: replace any 00 UTC file obtained before that date.
@@ -111,7 +111,7 @@ cloud involved, and the thermal fields — untouched by aerosol — agree with E
 **What to do.** If you use this archive for solar resource, for an energy application, or as
 training data against pyranometer observations, expect a systematic high bias in surface
 shortwave of about this size. It is a property of the run and cannot be removed after the
-fact. Measured in [#45](https://github.com/meteocima/CHAPTER/issues/45).
+fact. Measured in [#45](https://github.com/meteocima/CHAPTER_LAM_AI/issues/45).
 
 ### 1.2 Total cloud cover runs 22 % below ERA5, and high cloud 39 % below
 
@@ -142,7 +142,7 @@ The condensate is there; the fraction the scheme assigns to it is not.
 overlapped at 3 km and then averaged to 31 km; ERA5's is overlapped on an already-smooth 31 km
 profile, which yields somewhat more cover. That effect is bounded by the same 2–4 % span, so it
 cannot account for 22 % — but it is real, and the figure should not be quoted as if it were all
-model error. Measured in [#48](https://github.com/meteocima/CHAPTER/issues/48).
+model error. Measured in [#48](https://github.com/meteocima/CHAPTER_LAM_AI/issues/48).
 
 ### 1.3 Land skin temperature runs 1.6 K below ERA5, 3.2 K at midday — and this contradicts the two above
 
@@ -172,7 +172,7 @@ elevation of an upscaled land cell, or a genuine cold bias.
 **What to do.** If you use `skt` over land for evaluation, bias correction, or ML training
 against satellite land surface temperature, apply the number. Do not predict a warm land
 surface from the radiation findings — the archive does the opposite. Measured in
-[#57](https://github.com/meteocima/CHAPTER/issues/57).
+[#57](https://github.com/meteocima/CHAPTER_LAM_AI/issues/57).
 
 ---
 
@@ -197,7 +197,7 @@ points — with a floor of 0.011 m where snow covers the surface. Nothing is cap
 **What to do.** Do not take `fsr` from this archive and `fsr` from ERA5 as the same quantity:
 over land they differ by a factor of two to three. A drag coefficient computed from ours and
 compared against one computed from ERA5's will show a discrepancy that is not physical.
-Measured in [#56](https://github.com/meteocima/CHAPTER/issues/56).
+Measured in [#56](https://github.com/meteocima/CHAPTER_LAM_AI/issues/56).
 
 ### 2.2 `zust` runs 1.6 to 2.1 times ERA5's over land, and agrees over sea
 
@@ -214,7 +214,7 @@ against 1.40–1.75 at 12Z, in every region.
 
 The field is internally consistent with the published stresses: `|τ| = ρu*²` holds to
 1.8e-6 N/m² and `zust = sqrt(|τ|/ρ)` to 2.7e-4 m/s, at every point of every timestep checked.
-Measured in [#56](https://github.com/meteocima/CHAPTER/issues/56).
+Measured in [#56](https://github.com/meteocima/CHAPTER_LAM_AI/issues/56).
 
 ### 2.3 `skt` is derived, its accuracy is known, and it is seasonal
 
@@ -237,7 +237,7 @@ Over water, where the answer is known independently, the derivation is exact.
 land in winter, allow a tenth of a kelvin of derivation error on top of the physical bias of
 §1.3 — the two are unrelated and the derivation error (at most 0.119 K RMSE, in February) is more
 than ten times smaller. Measured in
-[#55](https://github.com/meteocima/CHAPTER/issues/55).
+[#55](https://github.com/meteocima/CHAPTER_LAM_AI/issues/55).
 
 ---
 
@@ -267,7 +267,7 @@ The reason is that each follows its own definition rather than a single house co
 **What to do.** Do not build a profile that puts `2r` at the bottom of `r`. Do not compute a
 vertical humidity gradient across the two. If you need them on one convention, recompute the
 one you need from `q`, `t` and `sp` — all three are published. Decided and measured in
-[#40](https://github.com/meteocima/CHAPTER/issues/40).
+[#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40).
 
 ### 3.2 `r` above 100 % is normal, not a defect
 
@@ -281,8 +281,8 @@ terrain (§4.1), read at a nominal pressure of 1000 hPa. See §4.1 before treati
 error.
 
 If your ingest pipeline rejects relative humidity above 100, it will reject valid data from
-this archive. Measured in [#40](https://github.com/meteocima/CHAPTER/issues/40) and
-[#44](https://github.com/meteocima/CHAPTER/issues/44).
+this archive. Measured in [#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40) and
+[#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44).
 
 ### 3.3 Humidity reconstructed from `2t` and `2d` peaks at 100.09 %
 
@@ -298,7 +298,7 @@ in vapour pressure. That trades a constraint for the appearance of one.
 
 **What to do.** Expect a reconstruction that peaks a tenth of a per cent above saturation. If
 you need a hard bound, clip your own reconstruction rather than reading it as an inconsistency
-in the archive. Measured in [#42](https://github.com/meteocima/CHAPTER/issues/42).
+in the archive. Measured in [#42](https://github.com/meteocima/CHAPTER_LAM_AI/issues/42).
 
 ---
 
@@ -332,7 +332,7 @@ a `t` bias of −1.71 K at 1000 hPa against −0.05 K at 850 hPa, and a `z` corr
 
 **What to do.** Mask the pressure levels against `sp` yourself if you need a clean comparison
 against ERA5 or a thickness computation. Every field needed to do it is in the same file.
-Measured in [#44](https://github.com/meteocima/CHAPTER/issues/44).
+Measured in [#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44).
 
 ### 4.2 `z` is exactly 9.80665 × WRF's height, and the run integrated with 9.81
 
@@ -348,7 +348,7 @@ Both halves of this are true and a user will find one of them alone:
 Neither number can be removed without breaking the other. The convention chosen is the one that
 makes `z` a correct ECMWF geopotential and makes the surface and pressure-level geopotentials
 agree with each other exactly — which they do, verified point by point over 1 349 910 land
-points. Measured in [#39](https://github.com/meteocima/CHAPTER/issues/39).
+points. Measured in [#39](https://github.com/meteocima/CHAPTER_LAM_AI/issues/39).
 
 ---
 
@@ -418,7 +418,7 @@ this archive applies zero.
 correction repairs that, because it is a different quantity rather than a mis-scaled one. The
 correlation of 0.81 means it ranks windy places and windy hours correctly, so it is usable for
 ranking, for patterns, and as a lower bound. It will not give you a gust threshold. Measured in
-[#50](https://github.com/meteocima/CHAPTER/issues/50).
+[#50](https://github.com/meteocima/CHAPTER_LAM_AI/issues/50).
 
 ### 5.2 And its declared one-hour window is right only 88 % of the time
 
@@ -452,7 +452,7 @@ with adaptive-timestep variability, but the mechanism was not established.
 **What to do.** Do not treat the `10fg` time window as exact when a single hour matters. Over a
 season or a distribution the effect is the 12 % contamination above, which is quantified; for a
 specific hour there is no flag in the file. Measured in
-[#49](https://github.com/meteocima/CHAPTER/issues/49).
+[#49](https://github.com/meteocima/CHAPTER_LAM_AI/issues/49).
 
 ---
 
@@ -487,7 +487,7 @@ Against ERA5 the partition is the opposite way round: `sro` at 1.0–4.6 of ERA5
 term — it does not, at daily scale. `ro` and `sro` are, knowingly, duplicate messages. We are
 not short of surface runoff; we are missing the other half of the partition, and ERA5's
 dominant term is the one we do not carry. Measured in
-[#51](https://github.com/meteocima/CHAPTER/issues/51).
+[#51](https://github.com/meteocima/CHAPTER_LAM_AI/issues/51).
 
 ### 6.2 `tcw` sums six species where ECMWF defines five
 
@@ -514,7 +514,7 @@ leaving the archive altogether.
 
 **What to do.** If you reconstruct `tcw` from `tcwv + tclw + tciw + tcrw + tcsw`, you will not
 get `tcw`, and the difference is graupel. In convective conditions it is not small. Measured in
-[#47](https://github.com/meteocima/CHAPTER/issues/47).
+[#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47).
 
 ---
 
@@ -558,9 +558,9 @@ Note the related fact that **`lsm` and `al` are *not* constant in time** in this
 follow the model hour by hour, because that is what it integrated, and WRF moves the land mask
 where sea ice appears. They are written in every message and must not be treated as
 one-per-archive statics. Decided and measured in
-[#34](https://github.com/meteocima/CHAPTER/issues/34),
-[#36](https://github.com/meteocima/CHAPTER/issues/36) and
-[#38](https://github.com/meteocima/CHAPTER/issues/38).
+[#34](https://github.com/meteocima/CHAPTER_LAM_AI/issues/34),
+[#36](https://github.com/meteocima/CHAPTER_LAM_AI/issues/36) and
+[#38](https://github.com/meteocima/CHAPTER_LAM_AI/issues/38).
 
 ### 7.2 `mucin` is masked where the scheme declined, on most of the domain
 
@@ -589,7 +589,7 @@ ones, while ERA5 reports the field more widely.
 that is the state the archive deliberately does not publish, and a model trained on it learns
 that low-CAPE situations have no convective inhibition, which is the inverse of the physics.
 `mucape` is dense and its zeros are real — no CAPE genuinely is no available energy. Decided
-and measured in [#54](https://github.com/meteocima/CHAPTER/issues/54).
+and measured in [#54](https://github.com/meteocima/CHAPTER_LAM_AI/issues/54).
 
 ---
 
@@ -606,7 +606,7 @@ messages.
 **What to do.** Test `stepType` / `typeOfStatisticalProcessing` and `stepRange`, which state it
 unambiguously: an accumulation has a one-hour step and the previous hour as reference time. See
 §3 of `CHAPTER_VARIABLES.md` for the time convention itself. Measured in
-[#53](https://github.com/meteocima/CHAPTER/issues/53).
+[#53](https://github.com/meteocima/CHAPTER_LAM_AI/issues/53).
 
 ### 8.2 `al` is a two-season table value by land-use category, not a continuous field
 
@@ -624,7 +624,7 @@ from the land-use table's WINTER and SUMMER columns by dominant category. Conseq
 **What to do.** Do not read `al` as an observed or evolving albedo, and do not difference it
 across the seasonal boundary expecting a physical signal. Note also that it moves *twice* for
 another reason: at sea-ice points, following the land mask of §7.1. Measured in
-[#37](https://github.com/meteocima/CHAPTER/issues/37).
+[#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37).
 
 ### 8.3 `slor` is the slope of the resolved terrain, and `sdor` is ERA5's quantity at 3 km
 
@@ -638,7 +638,7 @@ Two orography parameters, differing from ERA5 in two different ways:
   measured ratio of medians against ERA5 is 0.244, which is (3/31)^0.605 — a resolution
   rescaling, not a different definition.
 
-Measured in [#37](https://github.com/meteocima/CHAPTER/issues/37).
+Measured in [#37](https://github.com/meteocima/CHAPTER_LAM_AI/issues/37).
 
 ### 8.4 "No ERA5 parameter fits" usually means "ERA5 does not publish it"
 
@@ -664,7 +664,7 @@ carries one leaf area index per cell and ERA5 wants one per vegetation class, so
 be our invention — without mentioning that the underlying field exists. It does. Note that
 `rdlai2d = .false.`, so it is a table lookup on the dominant category rather than an observed
 LAI, which is a second reason not to split it. Measured in
-[#35](https://github.com/meteocima/CHAPTER/issues/35).
+[#35](https://github.com/meteocima/CHAPTER_LAM_AI/issues/35).
 
 ### 8.5 00 UTC is the previous day's model run, and the run switch falls at 01 UTC
 
@@ -696,15 +696,15 @@ lead 6→7, the first hour after its spin-up.
 UTC sees the switch; on this day it is 2.7 times the hourly change in `2t`. Where the previous
 day's 24 h state is lost at the source, the **whole** 00 UTC timestep is missing (every message
 a bitmap), never filled from the next run. Measured in
-[#70](https://github.com/meteocima/CHAPTER/issues/70) and
-[#72](https://github.com/meteocima/CHAPTER/issues/72).
+[#70](https://github.com/meteocima/CHAPTER_LAM_AI/issues/70) and
+[#72](https://github.com/meteocima/CHAPTER_LAM_AI/issues/72).
 
 ---
 
 ## Where the measurements live
 
 Every number in this document was produced by a script in `tools/audit/` of the
-[CHAPTER repository](https://github.com/meteocima/CHAPTER) and is written up, with its method,
+[CHAPTER repository](https://github.com/meteocima/CHAPTER_LAM_AI) and is written up, with its method,
 in `docs/audit/`:
 
 | document | covers |

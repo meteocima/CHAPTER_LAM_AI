@@ -23,13 +23,13 @@ denominator.
 | variable | paramId | leg A | leg C (ERA5) | verdict |
 |---|---|---|---|---|
 | `t` | 130 | ok | bias −0.01 to −0.19 K, corr ≥ 0.987, 850–100 hPa | **verified** |
-| `q` | 133 | ok | ratio 0.96–1.01, corr 0.86–0.96 | **verified**, denominator → [#41](https://github.com/meteocima/CHAPTER/issues/41) |
-| `r` | 157 | ok | ratio **0.51–0.67 above 400 hPa** | **wrong** ([#40](https://github.com/meteocima/CHAPTER/issues/40)) |
+| `q` | 133 | ok | ratio 0.96–1.01, corr 0.86–0.96 | **verified**, denominator → [#41](https://github.com/meteocima/CHAPTER_LAM_AI/issues/41) |
+| `r` | 157 | ok | ratio **0.51–0.67 above 400 hPa** | **wrong** ([#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40)) |
 | `u` | 131 | ok | bias ≤ 0.21 m/s, corr 0.94–0.99 | **verified** |
 | `v` | 132 | ok | bias ≤ 0.09 m/s, corr 0.94–0.99 | **verified** |
 | `w` | 135 | ok | corr 0.22–0.56, see below | **verified** |
 | `wz` | 260238 | ok | ERA5 does not carry it; leg D median 8.9e-05 m/s | **verified** |
-| `z` | 129 | ok | bias +8 to +63 m²/s² mid-troposphere | **wrong** ([#39](https://github.com/meteocima/CHAPTER/issues/39)) |
+| `z` | 129 | ok | bias +8 to +63 m²/s² mid-troposphere | **wrong** ([#39](https://github.com/meteocima/CHAPTER_LAM_AI/issues/39)) |
 | `cc` | 248 | ok | corr 0.21–0.63 | **verified** |
 | `clwc` | 246 | ok | see the partition below | **verified** |
 | `ciwc` | 247 | ok | see the partition below | **verified** |
@@ -46,7 +46,7 @@ both meaningless. Every number in this document is per level.
 
 ## The three findings
 
-### 1. `z` is 0.034 per cent below WRF's own geopotential — and that is correct ([#39](https://github.com/meteocima/CHAPTER/issues/39), closed as not a defect)
+### 1. `z` is 0.034 per cent below WRF's own geopotential — and that is correct ([#39](https://github.com/meteocima/CHAPTER_LAM_AI/issues/39), closed as not a defect)
 
 The converter writes `to_levels(getvar('z')) * 9.80665`, but wrf-python built
 that height by dividing WRF's own geopotential by **its own** constant,
@@ -87,7 +87,7 @@ agree exactly.** WRF builds `PHB` from the terrain with *its own* gravity and
 | `PH[k=0]` | identically **0.0** |
 
 Both fields therefore reduce to `HGT × 9.80665` at the ground. Publishing
-`geopt` straight — the fix [#39](https://github.com/meteocima/CHAPTER/issues/39)
+`geopt` straight — the fix [#39](https://github.com/meteocima/CHAPTER_LAM_AI/issues/39)
 proposed — would have made the column field `HGT × 9.81` against a surface field
 of `HGT × 9.80665` and *introduced* the 0.034 % inconsistency it was filed to
 remove.
@@ -100,11 +100,11 @@ Decided with the user, in favour of the status quo: **dividing our `z` by
 fields stay consistent. The price accepted is that `z`, `t` and `p` are not
 hydrostatically consistent at the 0.034 % level, which is below the level anyone
 integrates these fields to. It belongs in the user-facing document
-([#58](https://github.com/meteocima/CHAPTER/issues/58)), not in the converter.
+([#58](https://github.com/meteocima/CHAPTER_LAM_AI/issues/58)), not in the converter.
 
 Family 7's verification stands; this finding does not.
 
-### 2. `r` is humidity over liquid water, clipped at 100 ([#40](https://github.com/meteocima/CHAPTER/issues/40))
+### 2. `r` is humidity over liquid water, clipped at 100 ([#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40))
 
 Leg C shows `r` agreeing within 3 per cent to 700 hPa and then collapsing, while
 `q` and `t` — the two fields `r` is made of — agree within a few per cent at the
@@ -133,7 +133,7 @@ pressure levels the clip removes real supersaturation at 27 137 points at
 1000 hPa and 75 124 at 925 hPa in one file, while ERA5 on those dates reaches 128
 per cent.
 
-**This corrects [#33](https://github.com/meteocima/CHAPTER/issues/33)**, which
+**This corrects [#33](https://github.com/meteocima/CHAPTER_LAM_AI/issues/33)**, which
 concluded `2r` has no clip — see the last section.
 
 ### The definition that replaces it, from the IFS documentation
@@ -217,7 +217,7 @@ survived was clipped away.
 
 **The extremes above 130 are an artifact of this measurement, not of the
 archive.** Below ground `q` and `t` are clamped from about 25 m AGL
-([#44](https://github.com/meteocima/CHAPTER/issues/44)), where the real pressure
+([#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44)), where the real pressure
 may be 700 hPa; pairing them with the *nominal* 1000 hPa inflates the vapour
 pressure by up to a factor 1.4 and manufactures the 163 per cent. The archive's
 own `r` below ground is the model's own value and is sound.
@@ -225,7 +225,7 @@ own `r` below ground is the model's own value and is sound.
 **That settles how the fix must compute it**: `r` has to be evaluated on model
 levels and then interpolated, exactly as now, and not recomputed from the
 interpolated `q` and `t` at the nominal level pressure. Noted on
-[#40](https://github.com/meteocima/CHAPTER/issues/40).
+[#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40).
 
 So `RANGE_OVERRIDE['r']` is now **(0, 200)**: enough room for the extrapolation,
 still tight enough to catch a doubling or a unit error. `2r` stays at (0, 130),
@@ -234,7 +234,7 @@ which its measured maximum of 100.2 leaves untouched.
 ### `r` takes the mixed phase; `2r` stays over water — two conventions, both right
 
 Decided 2026-09-22 and **revised the same day**, after
-[#44](https://github.com/meteocima/CHAPTER/issues/44) showed why the first
+[#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44) showed why the first
 version of the argument did not hold.
 
 The first decision moved **both** `r` and `2r` to the mixed phase, on the ground
@@ -269,7 +269,7 @@ here:** `r` and `2r` use different saturations. Someone who reads `r` at 1000 hP
 and `2r` together and assumes they are the same quantity will be wrong at cold
 points — the mirror image of the trap this audit just removed.
 
-### 3. `q` and the hydrometeors use different moist air ([#41](https://github.com/meteocima/CHAPTER/issues/41))
+### 3. `q` and the hydrometeors use different moist air ([#41](https://github.com/meteocima/CHAPTER_LAM_AI/issues/41))
 
 The hydrometeors divide by `1 + r_total` (all six species); `q` is written as
 `r_v / (1 + r_v)`. ECMWF's moist air includes the condensate, so `q` should carry
@@ -324,7 +324,7 @@ measurement rather than in the argument (2024-07-15T12):
 | 100 hPa | 92.734 | 92.766 |
 
 Far apart below ground, together aloft: that is the signature of the clamp
-([#44](https://github.com/meteocima/CHAPTER/issues/44)) and of nothing else. At
+([#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44)) and of nothing else. At
 00Z the same two columns read 100.068 against 145.097 at 1000 hPa.
 
 And the signal the old field did not have is there: **139.7 % at 300 hPa** in the
@@ -429,7 +429,7 @@ below. At 2024-07-15T12:
 
 Nothing is missing: `n_missing` is 0 everywhere.
 
-#### Correction: it is a clamp, not an extrapolation ([#44](https://github.com/meteocima/CHAPTER/issues/44))
+#### Correction: it is a clamp, not an extrapolation ([#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44))
 
 This section first said those values were an extrapolation, and that ERA5
 extrapolates too so the convention matches. **Both halves are wrong**, found by
@@ -460,12 +460,12 @@ file. And **ERA5 does extrapolate**, with a lapse rate, so the two archives
 differ in convention exactly where 1000 hPa is underground — which is most of the
 land, and which is the whole of 1000 hPa's leg C anomaly (`t` bias −1.71 K
 against −0.05 K at 850, `z` correlation 0.108). Filed as
-[#44](https://github.com/meteocima/CHAPTER/issues/44); it needs a decision, not a
+[#44](https://github.com/meteocima/CHAPTER_LAM_AI/issues/44); it needs a decision, not a
 patch.
 
 ### 50 hPa is the model lid, and three independent measurements say so
 
-[#12](https://github.com/meteocima/CHAPTER/issues/12) established that 50 hPa is
+[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12) established that 50 hPa is
 exactly `p_top` with no damping. This family puts numbers on it:
 
 | | 50 hPa | 100 hPa |
@@ -482,7 +482,7 @@ should carry a warning wherever the archive is described.**
 
 ## Correcting a closed ticket
 
-[#33](https://github.com/meteocima/CHAPTER/issues/33) examined whether `2r` is
+[#33](https://github.com/meteocima/CHAPTER_LAM_AI/issues/33) examined whether `2r` is
 clipped, concluded it is not, and recorded that in
 `docs/audit/harness.md` under *A measurement that killed its own suspicion*. The
 suspicion was right.
@@ -515,15 +515,15 @@ distinguishes them.
 
 ## What this family contaminates
 
-- **Family 2 ([#20](https://github.com/meteocima/CHAPTER/issues/20))** owns `2r`
-  and must read [#40](https://github.com/meteocima/CHAPTER/issues/40) before
+- **Family 2 ([#20](https://github.com/meteocima/CHAPTER_LAM_AI/issues/20))** owns `2r`
+  and must read [#40](https://github.com/meteocima/CHAPTER_LAM_AI/issues/40) before
   judging it. `2t` and `2d` are untouched.
-- **[#33](https://github.com/meteocima/CHAPTER/issues/33)'s resolution** on the
+- **[#33](https://github.com/meteocima/CHAPTER_LAM_AI/issues/33)'s resolution** on the
   `2r` clip, and the section of `docs/audit/harness.md` that records it.
 - **Family 7's `z`** is *not* contaminated — the surface geopotential is right,
   and that is what makes the pressure-level one inconsistent with it.
-- **Family 3 ([#21](https://github.com/meteocima/CHAPTER/issues/21))** is *not*
-  contaminated by [#41](https://github.com/meteocima/CHAPTER/issues/41): the
+- **Family 3 ([#21](https://github.com/meteocima/CHAPTER_LAM_AI/issues/21))** is *not*
+  contaminated by [#41](https://github.com/meteocima/CHAPTER_LAM_AI/issues/41): the
   column integrals already use the all-species denominator. Family 3 should
   however expect the same liquid/ice partition difference in `tclw` and `tciw`
   that appears here, and read their sum.

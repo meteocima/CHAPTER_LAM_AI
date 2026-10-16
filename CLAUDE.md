@@ -223,7 +223,7 @@ WRF NetCDF (`wrfout_d02_*`) -> wrf-python diagnostics + pressure interpolation -
 
 ### Issue tracker
 
-GitHub Issues in `meteocima/CHAPTER`, via the `gh` CLI (installed in `~/.local/bin`, authenticated as `MonacoL`). See `docs/agents/issue-tracker.md`.
+GitHub Issues in `meteocima/CHAPTER_LAM_AI`, via the `gh` CLI (installed in `~/.local/bin`, authenticated as `MonacoL`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

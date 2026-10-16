@@ -1,6 +1,6 @@
 # Family 5: water-cycle accumulations and `10fg`
 
-> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER/issues/71)
+> **Measured on the 0-H archive.** Until [#71](https://github.com/meteocima/CHAPTER_LAM_AI/issues/71)
 > (2026-10-07) every accumulation was summed from 00Z of the day, with zero at 00Z; since then
 > each covers the hour ending at its timestep, 00Z included. Statements below about accumulations
 > "since 00Z" or "zero at 00Z" describe the archive this audit was run on, not the current one.
@@ -16,13 +16,13 @@ the harness cannot make are `tools/audit/f5_water.py`, output beside the rows as
 
 **Six of the seven are verified.** `10fg` is not: its message says a one-hour
 maximum and on 12 per cent of hours it is a maximum over more than one hour
-([#49](https://github.com/meteocima/CHAPTER/issues/49)). Three further findings
+([#49](https://github.com/meteocima/CHAPTER_LAM_AI/issues/49)). Three further findings
 are not conversion defects but properties nothing states: `10fg` is not a gust
-in any useful sense ([#50](https://github.com/meteocima/CHAPTER/issues/50)),
+in any useful sense ([#50](https://github.com/meteocima/CHAPTER_LAM_AI/issues/50)),
 `ssro` is empty and `ro` therefore carries no information `sro` does not
-([#51](https://github.com/meteocima/CHAPTER/issues/51)), and graupel
+([#51](https://github.com/meteocima/CHAPTER_LAM_AI/issues/51)), and graupel
 precipitation falls out of both published components of `tp`
-([#52](https://github.com/meteocima/CHAPTER/issues/52)).
+([#52](https://github.com/meteocima/CHAPTER_LAM_AI/issues/52)).
 
 ## The sample is not enough for this family, and saying so is the point
 
@@ -41,12 +41,12 @@ here rests on a timestep the rest of the audit did not also measure.
 | variable | paramId | leg A | leg B | leg C | verdict |
 |---|---|---|---|---|---|
 | `tp` | 228 | ok | **exact**, `RAINNC` | **0.971** vs ERA5 `tp`, corr 0.77 | **verified** |
-| `sf` | 144 | ok | **exact**, `SNOWNC` | **1.016** vs ERA5 `sf`, corr 0.80 | **verified**, → [#52](https://github.com/meteocima/CHAPTER/issues/52) |
-| `tirf` | 235015 | ok | **exact**, identity | **0.960** vs ERA5 `tp − sf`, corr 0.76 | **verified**, → [#52](https://github.com/meteocima/CHAPTER/issues/52) |
-| `sro` | 8 | ok | **exact**, `SFROFF` | 1.0–4.6 vs ERA5 | **verified**, → [#51](https://github.com/meteocima/CHAPTER/issues/51) |
-| `ssro` | 9 | ok | **exact**, `UDROFF` | **0.000–0.004** | **verified but empty** → [#51](https://github.com/meteocima/CHAPTER/issues/51) |
-| `ro` | 205 | ok | **exact**, identity | 0.19–0.85 vs ERA5 | **verified**, → [#51](https://github.com/meteocima/CHAPTER/issues/51) |
-| `10fg` | 49 | ok | **exact**, `WSPD10MAX` | **0.625** vs ERA5 `10fg` | **wrong window** → [#49](https://github.com/meteocima/CHAPTER/issues/49), not a gust → [#50](https://github.com/meteocima/CHAPTER/issues/50) |
+| `sf` | 144 | ok | **exact**, `SNOWNC` | **1.016** vs ERA5 `sf`, corr 0.80 | **verified**, → [#52](https://github.com/meteocima/CHAPTER_LAM_AI/issues/52) |
+| `tirf` | 235015 | ok | **exact**, identity | **0.960** vs ERA5 `tp − sf`, corr 0.76 | **verified**, → [#52](https://github.com/meteocima/CHAPTER_LAM_AI/issues/52) |
+| `sro` | 8 | ok | **exact**, `SFROFF` | 1.0–4.6 vs ERA5 | **verified**, → [#51](https://github.com/meteocima/CHAPTER_LAM_AI/issues/51) |
+| `ssro` | 9 | ok | **exact**, `UDROFF` | **0.000–0.004** | **verified but empty** → [#51](https://github.com/meteocima/CHAPTER_LAM_AI/issues/51) |
+| `ro` | 205 | ok | **exact**, identity | 0.19–0.85 vs ERA5 | **verified**, → [#51](https://github.com/meteocima/CHAPTER_LAM_AI/issues/51) |
+| `10fg` | 49 | ok | **exact**, `WSPD10MAX` | **0.625** vs ERA5 `10fg` | **wrong window** → [#49](https://github.com/meteocima/CHAPTER_LAM_AI/issues/49), not a gust → [#50](https://github.com/meteocima/CHAPTER_LAM_AI/issues/50) |
 
 No leg A failure, no bitmap, no missing point, at any of the 34 timesteps. Leg B
 is **exact for all seven** — four read straight through from the wrfout and
@@ -137,7 +137,7 @@ recorded reason it is not published as `ro`.
 
 ### Zero at 00Z, exactly
 
-*Superseded by [#71](https://github.com/meteocima/CHAPTER/issues/71): since 2026-10-07 every
+*Superseded by [#71](https://github.com/meteocima/CHAPTER_LAM_AI/issues/71): since 2026-10-07 every
 accumulation is the hour ending at its timestep, and 00Z holds the hour 23Z -> 00Z (see "The
 hour the 0-H archive did not hold" at the end). What follows was measured on the 0-H archive.*
 
@@ -222,7 +222,7 @@ established here.**
 ### It corrects a closed ticket
 
 `docs/audit/run-configuration.md` §e, the output of
-[#12](https://github.com/meteocima/CHAPTER/issues/12), says:
+[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12), says:
 
 > `CLAUDE.md` established for `WSPD10MAX` alone, by testing monotonicity across
 > hours, that it is reset at every history write. **That is now settled from the
@@ -235,7 +235,7 @@ generalisation to the other six maxima is safe. None of the other six is
 published, so nothing else in the archive depends on it — but a future ticket
 reaching for `W_UP_MAX` or `UP_HELI_MAX` must not inherit the window without
 testing it. A correction is posted on
-[#12](https://github.com/meteocima/CHAPTER/issues/12).
+[#12](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12).
 
 ## `10fg` is not a gust, and now there is a number
 
@@ -260,7 +260,7 @@ But it means the "maximum" adds almost nothing. Published under paramId 49,
 `10fg` is the 10 m wind speed with a two-per-cent premium, where ERA5's is a
 parameterised gust roughly 1.6 times the mean wind. A user who reads it as a
 gust under-predicts by 38 per cent, and no document carries that number.
-[#50](https://github.com/meteocima/CHAPTER/issues/50).
+[#50](https://github.com/meteocima/CHAPTER_LAM_AI/issues/50).
 
 ## The runoff triplet carries one field's worth of information
 
@@ -288,7 +288,7 @@ ERA5's partition is the opposite: its `ssro` dominates its `ro`, which is why
 our `sro` runs 1.0–4.6 times ERA5's while our `ro` runs 0.19–0.85 of it. Anyone
 closing a water budget on this archive gets "no drainage", and three published
 variables deliver one field.
-[#51](https://github.com/meteocima/CHAPTER/issues/51).
+[#51](https://github.com/meteocima/CHAPTER_LAM_AI/issues/51).
 
 ## Graupel falls out of both components of `tp`
 
@@ -307,9 +307,9 @@ snowfall** in the domain mean and 12 mm at a point. ECMWF defines paramId 144
 convective precipitation — all solid precipitation, since IFS has no graupel
 category. Ours excludes it, so the archive's solid precipitation is short by
 whatever WSM6 froze into graupel rather than snow.
-[#52](https://github.com/meteocima/CHAPTER/issues/52).
+[#52](https://github.com/meteocima/CHAPTER_LAM_AI/issues/52).
 
-This is the same shape as [#47](https://github.com/meteocima/CHAPTER/issues/47)
+This is the same shape as [#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47)
 in family 3, and a degree worse: there graupel had no ERA5 home, here it has
 one.
 
@@ -333,18 +333,18 @@ touches carry it for free.
 Nothing is wrong: the accumulations are 00Z-referred and 128 does say so. But
 inside `grib_v3` the value **discriminates nothing**, and a consumer who tests
 it to find the 00Z-referred messages selects the entire file.
-[#53](https://github.com/meteocima/CHAPTER/issues/53).
+[#53](https://github.com/meteocima/CHAPTER_LAM_AI/issues/53).
 
 ## What this family contaminates
 
-- **[#12 run configuration](https://github.com/meteocima/CHAPTER/issues/12)** —
+- **[#12 run configuration](https://github.com/meteocima/CHAPTER_LAM_AI/issues/12)** —
   corrected, as above: the one-hour window for the `nwp_diagnostics` maxima is
   the configuration's intent, not the data's behaviour.
-- **Family 4** ([#22](https://github.com/meteocima/CHAPTER/issues/22), closed) —
+- **Family 4** ([#22](https://github.com/meteocima/CHAPTER_LAM_AI/issues/22), closed) —
   **confirmed, not contradicted**. Family 4 verified the machinery on thirteen
   radiation fields; this family verified WRF's counters underneath it on two
   whole days. The nineteen accumulators of the schema now rest on both.
-- **Family 3** ([#21](https://github.com/meteocima/CHAPTER/issues/21), closed) —
+- **Family 3** ([#21](https://github.com/meteocima/CHAPTER_LAM_AI/issues/21), closed) —
   its quadrature defect does **not** reach here. These are WRF's own counters,
   differenced; there is no vertical integral in this family.
 - **Nothing else.** `10fg`'s window defect is confined to one message of 246.
@@ -355,7 +355,7 @@ it to find the 00Z-referred messages selects the entire file.
   correlation with convective days; establishing the mechanism means reading
   WRF's diagnostic driver against the adaptive-timestep alarm, which is a
   separate piece of work and is named in
-  [#49](https://github.com/meteocima/CHAPTER/issues/49).
+  [#49](https://github.com/meteocima/CHAPTER_LAM_AI/issues/49).
 - **Whether the miss rate is stable across the archive.** 17 of 138 is six
   days, chosen because they were whole on disk, not sampled at random.
 - **`ssro` outside the sample.** The claim that `UDROFF` barely moves within a
@@ -368,7 +368,7 @@ family measured the defect on — and on 2024-07-15T12 as the summer control,
 because a repair that cannot be shown to be a no-op where it should be is only
 half checked. 246 messages and `check_grib_sanity` clean on both.
 
-### `sf` ([#52](https://github.com/meteocima/CHAPTER/issues/52))
+### `sf` ([#52](https://github.com/meteocima/CHAPTER_LAM_AI/issues/52))
 
 `sf = (SNOWNC + GRAUPELNC) − 00Z`, so paramId 144 means what ECMWF says: all
 solid precipitation reaching the surface.
@@ -382,7 +382,7 @@ solid precipitation reaching the surface.
 
 11.9747 mm and 6.44 % are this family's own figures (11.97 mm, 6.4 per cent) to
 the digit, and the summer control is exactly zero at the surface — graupel aloft
-([#47](https://github.com/meteocima/CHAPTER/issues/47)) never reaches it.
+([#47](https://github.com/meteocima/CHAPTER_LAM_AI/issues/47)) never reaches it.
 
 `HAILNC` was checked rather than assumed, as #52 asked: identically zero on both,
 consistent with WSM6 having no hail category, so it is not added.
@@ -392,7 +392,7 @@ consistent with WSM6 having no hail category, so it is not added.
 points above 1e-06 m. Before the repair that residual *was* the graupel column,
 11.97 mm at a point — two published fields that should have agreed, and did not.
 
-### `mucin` ([#54](https://github.com/meteocima/CHAPTER/issues/54))
+### `mucin` ([#54](https://github.com/meteocima/CHAPTER_LAM_AI/issues/54))
 
 Option 1: a GRIB bitmap where `cape_2d` declined, as ERA5 does. `mucape` keeps
 its zero fill, which is correct there, and the two no longer share one `dense()`.
@@ -415,12 +415,12 @@ precisely the Fortran's own 100 J/kg cut-off, not an approximation of it.
 The price is density, and it is the intended one: a model trained on the old
 field learned that low-CAPE situations have no convective inhibition, which is
 the inverse of the physics. The seasonal masked fraction goes in the
-user-facing document ([#58](https://github.com/meteocima/CHAPTER/issues/58)).
+user-facing document ([#58](https://github.com/meteocima/CHAPTER_LAM_AI/issues/58)).
 
 ### `10fg`: the window stays as it is, and the reason is the pipeline
 
 Decided with the user on 2026-09-25, closing
-[#49](https://github.com/meteocima/CHAPTER/issues/49) as a documentation item
+[#49](https://github.com/meteocima/CHAPTER_LAM_AI/issues/49) as a documentation item
 rather than a repair. The go/no-go had provisionally said "repair the encoding";
 working out how showed what that costs.
 
@@ -447,14 +447,14 @@ hours that window is longer than the one hour the message declares. The go/no-go
 rule was to repair where the archive would carry a wrong *number*, and this is
 not that case. A label can be qualified in the user-facing document; the
 scheduler's risk budget is better spent elsewhere, on a field that
-[#50](https://github.com/meteocima/CHAPTER/issues/50) shows is not a gust anyway
+[#50](https://github.com/meteocima/CHAPTER_LAM_AI/issues/50) shows is not a gust anyway
 and sits at 0.625 of ERA5's.
 
 Tracked for later as its own issue, not as a blocker.
 
 ## The hour the 0-H archive did not hold
 
-Measured 2026-10-07 for [#70](https://github.com/meteocima/CHAPTER/issues/70), with
+Measured 2026-10-07 for [#70](https://github.com/meteocima/CHAPTER_LAM_AI/issues/70), with
 `tools/audit/dayend_hour.py`. The run for day D starts at 18Z of D-1 and lasts 30 h
 (`run_hours = 30`), so it ends at 00Z of D+1; the archive takes 00Z of D+1 from the NEXT run.
 The 24 h file of run `2019020918` (`wrfout_d02_2019-02-11_00:00:00`, START_DATE
@@ -476,7 +476,7 @@ different accumulator values (6 h of spin-up against 29 h), and at the same inst
 differs by +0.13 K in the mean and 10.46 K at most. A day's total in the 0-H archive therefore
 covered 23 hours of 24.
 
-The repair ([#71](https://github.com/meteocima/CHAPTER/issues/71)) needs no reconversion: the
+The repair ([#71](https://github.com/meteocima/CHAPTER_LAM_AI/issues/71)) needs no reconversion: the
 archived 0-H values of two consecutive hours of one run differ by the hourly value to one
 packing quantum (24-bit, 3.7e-9 m on `tp`, 1-2 J/m^2 on radiation; measured against the wrfout
 on 2024-01-15 and 2024-04-15), and the hour 23Z -> 00Z comes from a snapshot of each run's
@@ -492,7 +492,7 @@ whole. Those 00Z hours stay 0-H until the files are recovered or their loss is v
 
 ## The whole 00Z from the previous day's run, and where the run switch falls (#72)
 
-Since [#72](https://github.com/meteocima/CHAPTER/issues/72) the 00Z of day D is the 24 h file of
+Since [#72](https://github.com/meteocima/CHAPTER_LAM_AI/issues/72) the 00Z of day D is the 24 h file of
 the run for D-1 in every field, not only in its accumulations. Re-converting 2024-01-19 00Z from
 that file (run 2024011718) changes 199 of the 227 instantaneous messages; the 28 unchanged are the
 statics, `fal` at night and zero cloud levels. The 19 accumulations recomputed as 24 h - 23Z
