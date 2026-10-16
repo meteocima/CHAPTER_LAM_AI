@@ -1,0 +1,7 @@
+CHAPTER: conversion of the CHAPTER reanalysis to GRIB2 and Anemoi datasets
+Copyright 2026 Fondazione CIMA (CIMA Research Foundation)
+
+This product includes software derived from wrf-python
+(https://github.com/NCAR/wrf-python), developed at the National Center for
+Atmospheric Research (NCAR) and distributed under the Apache License,
+Version 2.0. The derived code is in src/wrf/ and fortran/.
