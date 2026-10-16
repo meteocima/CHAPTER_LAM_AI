@@ -48,7 +48,7 @@ accumulations' reference time is the previous hour.
 
 **The whole 00 UTC timestep comes from the previous day's run**, instantaneous fields and
 pressure levels included ([#72](https://github.com/meteocima/CHAPTER/issues/72)); see §8.5. 00 UTC
-files written before [date the #72 re-conversion completed] took their instantaneous fields from
+files written before 15 October 2026 took their instantaneous fields from
 the next run, six hours into its spin-up. They are rewritten in place, and nothing inside a file
 tells the two apart: replace any 00 UTC file obtained before that date.
 
