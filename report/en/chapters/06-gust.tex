@@ -1,0 +1,84 @@
+\chapter{10 m wind and gust}
+\label{cap:raffica}
+
+\section{The \texorpdfstring{\campo{10fg}}{10fg} field}
+\label{sec:10fg}
+
+The \campo{10fg} field (paramId 49) is the maximum \SI{10}{m} wind speed that the simulation
+produced in the hour preceding the validity time. It comes from \campo{WSPD10MAX}, one of the hourly
+maxima that WRF writes with \campo{nwp_diagnostics=1}. It is a \emph{resolved wind}: it contains no
+turbulent term and no estimate of what the grid does not represent \parencite{issue50}.
+
+The ERA5 gust is a different quantity. The World Meteorological Organization defines the gust as
+the maximum of the wind averaged over \SI{3}{s}, an interval shorter than one time step of a
+\SI{31}{km} model, and ERA5 publishes an estimate of it, the \emph{parameterized gust}
+\parencite{paramdb}. In the IFS the parameterized gust is the mean \SI{10}{m} wind plus a turbulent
+term proportional to the friction velocity, plus, in convective conditions, a term proportional to
+the wind shear in the \SIrange{850}{950}{\hPa} layer \parencite[sec.~3.10.4, eq.~3.99]{ifs41r2p4}. The
+IFS computes it at every time step and archives its maximum since the last output.
+
+The regional simulation receives from ERA5 the state of the atmosphere and of the surface, not the
+diagnostic fields. The standard ECMWF field table of WPS 4.1 (\campo{Vtable.ECMWF}) contains
+neither paramId 49 nor 228029 \parencite{wps41}; the table used by this simulation has not been
+verified. Among the 200 variables of a wrfout file no gust field is present besides
+\campo{WSPD10MAX}, and the field published as \campo{10fg} is the closest to a gust that the
+simulation provides.
+
+\section{Comparison with ERA5}
+\label{sec:10fg-era5}
+
+\Cref{tab:10fg} gives the comparison over 16 validity times. \campo{10fg} is \num{0.625} times the
+ERA5 \campo{10fg} and \num{0.644} times the instantaneous parameterized gust \campo{i10fg}, with
+correlations of \num{0.813} and \num{0.820}. Against the instantaneous \SI{10}{m} wind of the same
+file it is between \num{1.004} and \num{1.032} times that wind, and at none of the \num{2220273} points is it
+lower. Under paramId 49 the archive publishes the \SI{10}{m} wind speed, whereas the ERA5
+parameterized gust is about \num{1.6} times its mean wind. The ratio to the ERA5 \campo{10fg} stays
+between \num{0.593} and \num{0.673} at all 34 validity times of the verification sample, in every
+month and at every hour, and the difference is one of definition.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{The archive's \campo{10fg} against three references, over 16 validity times.}
+  \label{tab:10fg}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Reference & CHAPTER / reference & Correlation \\
+    \midrule
+    ERA5 \campo{10fg} (parameterized gust, hourly maximum) & \num{0.625} & \num{0.813} \\
+    ERA5 \campo{i10fg} (parameterized gust, instantaneous) & \num{0.644} & \num{0.820} \\
+    CHAPTER instantaneous \SI{10}{m} wind, same file & \numrange{1.004}{1.032} & \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+At \SI{3}{km} part of what ERA5 has to parameterize is resolved, as the friction velocity over land
+shows, between \num{1.62} and \num{2.06} times that of ERA5 (\cref{sec:rugosita}). Read as a gust,
+\campo{10fg} underestimates the gust by about \SI{38}{\percent}, and no bias correction turns it into a gust,
+because it is a different quantity. With a correlation of \num{0.813} with the ERA5 \campo{10fg},
+the field is suited to ranking places and hours by windiness and to describing the spatial
+structure of the wind, and it acts as a lower bound on the gust; it is not suited to estimating the
+exceedance of a gust threshold.
+
+\section{The hourly window}
+\label{sec:10fg-finestra}
+
+The \campo{10fg} messages declare a maximum over the preceding hour (\cref{sec:tempo}). The hourly
+ERA5 parameterized gust is also a maximum over the preceding hour, so the length of the window does
+not explain the difference between the two fields. The encoding is correct. WRF resets \campo{WSPD10MAX} each
+time it writes a wrfout file, but over six whole days, 15 July 2019 and 1 and 15 February,
+20 March, 15 July and 15 August 2024, for 138 transitions from one hour to the next, the reset was
+missed 17 times, \SI{12.3}{\percent} of the cases \parencite{issue49}. In those hours the field
+contains the maximum over two hours or more, under a message that declares one.
+
+The effect shows in the mean excess over the instantaneous \SI{10}{m} wind:
+\SIrange{0.068}{0.311}{m/s} in the hours with a reset and \SIrange{0.499}{0.784}{m/s} in those
+without. On a domain mean of about \SI{4.5}{m/s} this is an overestimate of
+\SIrange{10}{17}{\percent}. In the hours without a reset the field approaches the ERA5
+parameterized gust because the window is longer, and the value alone cannot identify them. Nor do the other fields of the file: the seven WRF hourly maxima are reset by the same
+event and, when the reset is missed, all carry over together, so none of them signals the missed
+reset of the others. Recognizing those hours requires the wrfout file of the preceding hour, which
+is not available at conversion time. The mechanism of the missed reset has not been established.
+
+In statistics over a season, \SI{12.3}{\percent} of the hours carry a window longer than the
+declared one; for a single hour the declared window of \campo{10fg} is not guaranteed.

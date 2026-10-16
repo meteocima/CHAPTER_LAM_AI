@@ -1,0 +1,128 @@
+\chapter{Limits of the mapping}
+\label{cap:limiti}
+
+The ERA5 quantities of \cref{tab:limiti} have no counterpart in the archive. The limit lies
+in the wrfout files, which do not contain a field computed by the model, in the configuration of the
+simulation (\cref{sec:configurazione}) or in the publication rule (\cref{sec:pubblicazione}).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{ERA5 quantities absent from the archive and origin of the limit.}
+  \label{tab:limiti}
+  \begin{tabularx}{\textwidth}{@{}XX@{}}
+    \toprule
+    Parameter & Origin of the limit \\
+    \midrule
+    boundary layer height (\campo{blh}) & wrfout files: \campo{PBLH} computed and not written \\
+    sensible and latent heat fluxes & wrfout files: \campo{HFX} and \campo{LH} computed and not written \\
+    turbulent kinetic energy & configuration: no scheme with turbulent kinetic energy \\
+    maximum and minimum \SI{2}{m} temperature (\campo{mx2t}, \campo{mn2t}) & configuration: \campo{output_diagnostics=0} \\
+    waves, sea-state-dependent drag coefficient & configuration: no wave model \\
+    currents, sea surface height & configuration: ocean not simulated \\
+    sea-ice thickness and albedo & configuration: sea ice only as input data \\
+    convective precipitation (\campo{cp}, \campo{csf}) & configuration: resolved convection, identically zero field \\
+    gust components (\campo{10efg}, \campo{10nfg}) & publication rule \\
+    leaf area index per class (\campo{lai_lv}, \campo{lai_hv}) & publication rule \\
+    angle and anisotropy of sub-grid orography (\campo{anor}, \campo{isor}) & publication rule \\
+    snowmelt (\campo{smlt}) & publication rule \\
+    the 8 ERA5 pressure levels above \SI{50}{\hPa} (\SIlist{1;2;3;5;7;10;20;30}{\hPa}) & configuration: model top at \SI{50}{\hPa} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Fields computed and not written}
+\label{sec:non-scritti}
+
+The YSU scheme computes a boundary layer height (\campo{PBLH}), and with \campo{isfflx=1} the sensible
+and latent heat fluxes (\campo{HFX}, \campo{LH}) are computed at every time step. None of the three
+was written to the wrfout files, and no more complete output of the simulation exists. The same
+holds for the model skin temperature \campo{TSK}, which the archive reconstructs from the radiation
+(\cref{sec:pelle}).
+
+For the boundary layer height, an a posteriori diagnosis, for example with the bulk Richardson number
+on the profiles, would be ours and not the model's, and does not satisfy the publication rule
+(\cref{sec:pubblicazione}). Nor can the fluxes be reconstructed from the surface energy balance,
+because the balance keeps three unknowns: the two fluxes and the ground heat flux, which was not
+written either.
+
+\section{Fields excluded by the configuration}
+\label{sec:configurazione-limiti}
+
+The YSU scheme is non-local and has no prognostic turbulent kinetic energy, and with \campo{KM_OPT=4} the
+diffusion does not produce it either: the field does not exist at any height.
+
+With \campo{output_diagnostics=0} WRF did not write the hourly maxima and minima of the \SI{2}{m}
+temperature, and an hourly sample of \campo{2t} is not the extreme within the hour. With
+\campo{nwp_diagnostics=1} the simulation writes hourly maxima, but none for temperature.
+
+No wave model is coupled to the atmosphere, so the significant wave height, the wave period and
+direction, and the sea-state-dependent drag coefficient are missing. The ocean is not simulated
+(\campo{SF_OCEAN_PHYSICS=0}), so there are no currents and no sea surface height. Sea ice comes only
+from the input data, as a 0/1 indicator per cell, with a constant albedo of \num{0.65}; neither
+the ice thickness nor an evolving ice albedo exists.
+
+With resolved convection (\campo{CU_PHYSICS=0}) the convective precipitation \campo{RAINC} is
+identically zero, and the ERA5 convective parameters \campo{cp} and \campo{csf} are not published
+(\cref{sec:non-pubblicati}).
+
+\section{Fields excluded by the publication rule}
+\label{sec:esclusi}
+
+\paragraph{Gust components.} For \campo{10efg} and \campo{10nfg} only the magnitude of the hourly
+maximum of the resolved wind exists (\cref{cap:raffica}), and the two components are excluded by
+decision.
+
+\paragraph{Leaf area index.} The model carries a single leaf area index per cell, a table value for
+the dominant category (\campo{rdlai2d=.false.}), whereas ERA5 requires one for low vegetation and one
+for high vegetation. Any split of the single value between the two would be an assumption of ours.
+The model field \campo{LAI} is in the wrfout files and is not published.
+
+\paragraph{Angle and anisotropy of sub-grid orography.} The static file carries the asymmetry
+(\campo{OA1-4}) and effective length (\campo{OL1-4}) parameters of the Kim--Arakawa scheme. ECMWF's
+\campo{anor} and \campo{isor} derive from the structure of the covariance of the terrain gradient,
+and the two quantities are different.
+
+\paragraph{Snowmelt.} The field \campo{ACSNOM} exists but is not a monotonic accumulator. On 15 of the
+16 days examined some points decrease between 00 and 12 UTC, by up to \SI{8.2}{mm}, and on 1 July
+2024 the decrease relative to 00 UTC reaches \SI{7.26}{mm}. Built like the other accumulated
+fields, as the difference between two consecutive hours of the same run (\cref{sec:tempo}),
+\campo{smlt} would be negative at those points.
+
+\section{Fields present and not published}
+\label{sec:non-pubblicati}
+
+Sixteen fields of the wrfout files are identically zero at every validity time of the verification sample:
+\campo{ACHFX}, \campo{ACLHF}, \campo{ACGRDFLX}, \campo{NOAHRES}, \campo{SSTSK}, \campo{SST_INPUT},
+\campo{SWNORM}, \campo{ACSNOW}, \campo{HAILNC}, \campo{RAINC}, \campo{RAINSH}, \campo{PREC_ACC_C} and
+the four fields of downward thermal radiation at the top of the atmosphere, \campo{LWDNT},
+\campo{LWDNTC}, \campo{ACLWDNT} and \campo{ACLWDNTC}. \campo{ACHFX}, \campo{ACLHF}, \campo{ACGRDFLX}
+and \campo{NOAHRES} are zero because they are accumulators of the Noah surface scheme, and this
+simulation uses RUC. An identically zero field is not published, whatever the reason.
+
+For other non-zero fields no ECMWF parameter describes the same quantity: the frozen fraction of
+precipitation (\campo{SR}), the density of falling snow (\campo{RHOSNF}), the annual maximum and
+minimum of the green vegetation fraction (\campo{SHDMAX}, \campo{SHDMIN}) and the deep soil
+temperature used as lower boundary condition (\campo{TMN}). The accumulated runoff \campo{ACRUNOFF}
+coincides with the surface runoff \campo{SFROFF}, and is already in \campo{sro}.
+
+Five non-zero fields stay out even though ECMWF defines a parameter for the same quantity, because
+ERA5 does not publish it and the archive follows the ERA5 schema (\cref{tab:non-pubblicati}).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Non-zero fields of the wrfout files with an ECMWF parameter that ERA5 does not publish.}
+  \label{tab:non-pubblicati}
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    \toprule
+    WRF field & ECMWF parameter \\
+    \midrule
+    \campo{SNOALB}     & 260161 \campo{mxsalb}, maximum snow albedo \\
+    \campo{QGRAUP}     & 260028 \campo{grle} and 260001 \campo{tcolg}, graupel and its column (\cref{sec:colonne}) \\
+    \campo{REFL_10CM}  & 260134 \campo{bref}, radar reflectivity \\
+    \campo{LPI}        & family 228050 \campo{litoti}; \campo{LPI}, however, is a lightning potential index, not a flash density \\
+    \campo{SNOWFALLAC} & 3066 \campo{sde}, because it is a geometric snow depth and not a water equivalent \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

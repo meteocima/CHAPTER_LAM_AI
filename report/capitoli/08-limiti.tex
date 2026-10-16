@@ -1,0 +1,129 @@
+\chapter{Limiti della corrispondenza}
+\label{cap:limiti}
+
+Le grandezze ERA5 della \cref{tab:limiti} non hanno un corrispettivo nell'archivio. Il limite
+sta nei file wrfout, che non contengono un campo calcolato dal modello, nella configurazione della
+simulazione (\cref{sec:configurazione}) o nella regola di pubblicazione (\cref{sec:pubblicazione}).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Grandezze ERA5 assenti dall'archivio e origine del limite.}
+  \label{tab:limiti}
+  \begin{tabularx}{\textwidth}{@{}XX@{}}
+    \toprule
+    Parametro & Origine del limite \\
+    \midrule
+    altezza dello strato limite (\campo{blh}) & file wrfout: \campo{PBLH} calcolato e non scritto \\
+    flussi di calore sensibile e latente & file wrfout: \campo{HFX} e \campo{LH} calcolati e non scritti \\
+    energia cinetica turbolenta & configurazione: nessuno schema con energia cinetica turbolenta \\
+    temperatura massima e minima a \SI{2}{m} (\campo{mx2t}, \campo{mn2t}) & configurazione: \campo{output_diagnostics=0} \\
+    onde, coefficiente di resistenza che dipende dallo stato del mare & configurazione: nessun modello d'onda \\
+    correnti, altezza della superficie del mare & configurazione: oceano non simulato \\
+    spessore e albedo del ghiaccio marino & configurazione: ghiaccio solo come dato di ingresso \\
+    precipitazione convettiva (\campo{cp}, \campo{csf}) & configurazione: convezione risolta, campo identicamente nullo \\
+    componenti della raffica (\campo{10efg}, \campo{10nfg}) & regola di pubblicazione \\
+    indice di area fogliare per classe (\campo{lai_lv}, \campo{lai_hv}) & regola di pubblicazione \\
+    angolo e anisotropia dell'orografia sottogriglia (\campo{anor}, \campo{isor}) & regola di pubblicazione \\
+    fusione della neve (\campo{smlt}) & regola di pubblicazione \\
+    gli 8 livelli di pressione ERA5 sopra \SI{50}{\hPa} (\SIlist{1;2;3;5;7;10;20;30}{\hPa}) & configurazione: top del modello a \SI{50}{\hPa} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Campi calcolati e non scritti}
+\label{sec:non-scritti}
+
+Lo schema YSU calcola un'altezza dello strato limite (\campo{PBLH}), e con \campo{isfflx=1} i flussi
+di calore sensibile e latente (\campo{HFX}, \campo{LH}) sono calcolati a ogni passo temporale. Nessuno
+dei tre è stato scritto nei file wrfout, e non esiste un output della simulazione più completo. Lo
+stesso vale per la temperatura di pelle del modello \campo{TSK}, che l'archivio ricostruisce dalla
+radiazione (\cref{sec:pelle}).
+
+Per l'altezza dello strato limite una diagnosi a posteriori, per esempio con il numero di Richardson
+di bulk sui profili, sarebbe nostra e non del modello, e non soddisfa la regola di pubblicazione
+(\cref{sec:pubblicazione}). Nemmeno i flussi si ricostruiscono dal bilancio energetico di superficie,
+perché nel bilancio restano tre incognite: i due flussi e il flusso di calore nel suolo, anch'esso non
+scritto.
+
+\section{Campi che la configurazione esclude}
+\label{sec:configurazione-limiti}
+
+Lo schema YSU è non locale e non porta energia cinetica turbolenta, e con \campo{KM_OPT=4} non la
+produce nemmeno la diffusione: il campo non esiste a nessuna quota.
+
+Con \campo{output_diagnostics=0} WRF non ha scritto i massimi e i minimi orari della temperatura a
+\SI{2}{m}, e un campionamento orario di \campo{2t} non è l'estremo nell'ora; la simulazione porta
+massimi orari, con \campo{nwp_diagnostics=1}, ma non per la temperatura.
+
+Nessun modello d'onda è accoppiato all'atmosfera, e mancano quindi l'altezza significativa, il
+periodo e la direzione delle onde, e il coefficiente di resistenza che dipende dallo stato del mare.
+L'oceano non è simulato (\campo{SF_OCEAN_PHYSICS=0}): non ci sono correnti né altezza della superficie
+del mare. Il ghiaccio marino viene solo dai dati di ingresso, come indicatore a due valori per cella,
+con albedo costante \num{0.65}: non esistono lo spessore del ghiaccio né un'albedo del ghiaccio che
+evolva.
+
+Con la convezione risolta (\campo{CU_PHYSICS=0}) la precipitazione convettiva \campo{RAINC} è
+identicamente nulla, e i parametri convettivi di ERA5, \campo{cp} e \campo{csf}, non si pubblicano
+(\cref{sec:non-pubblicati}).
+
+\section{Campi che la regola di pubblicazione esclude}
+\label{sec:esclusi}
+
+\paragraph{Componenti della raffica.} Per \campo{10efg} e \campo{10nfg} esiste solo il modulo del
+massimo orario del vento risolto (\cref{cap:raffica}), e le due componenti sono escluse per
+decisione.
+
+\paragraph{Indice di area fogliare.} Il modello porta un solo indice di area fogliare per cella, un
+valore di tabella per categoria dominante (\campo{rdlai2d=.false.}), mentre ERA5 ne vuole uno per la
+vegetazione bassa e uno per quella alta. Qualunque divisione del valore unico fra le due sarebbe
+un'ipotesi nostra. Il campo \campo{LAI} del modello è nei file wrfout e non è pubblicato.
+
+\paragraph{Angolo e anisotropia dell'orografia sottogriglia.} Il file statico porta i parametri di
+asimmetria (\campo{OA1-4}) e di lunghezza efficace (\campo{OL1-4}) dello schema di Kim--Arakawa.
+\campo{anor} e \campo{isor} di ECMWF vengono dalla struttura della covarianza del gradiente del
+terreno, e le due grandezze sono diverse.
+
+\paragraph{Fusione della neve.} Il campo \campo{ACSNOM} esiste ma non è un accumulatore monotono. In
+15 dei 16 giorni esaminati alcuni punti calano fra le 00 e le 12 UTC, fino a \SI{8.2}{mm}, e il 1º
+luglio 2024 il calo rispetto alle 00 UTC arriva a \SI{7.26}{mm}. Costruito come gli altri
+campi accumulati, come differenza fra due ore successive della stessa run (\cref{sec:tempo}),
+\campo{smlt} sarebbe negativo in quei punti.
+
+\section{Campi presenti e non pubblicati}
+\label{sec:non-pubblicati}
+
+Sedici campi dei file wrfout sono identicamente nulli in tutti gli istanti del campione di verifica:
+\campo{ACHFX}, \campo{ACLHF}, \campo{ACGRDFLX}, \campo{NOAHRES}, \campo{SSTSK}, \campo{SST_INPUT},
+\campo{SWNORM}, \campo{ACSNOW}, \campo{HAILNC}, \campo{RAINC}, \campo{RAINSH}, \campo{PREC_ACC_C} e i
+quattro campi della radiazione termica discendente al top dell'atmosfera, \campo{LWDNT},
+\campo{LWDNTC}, \campo{ACLWDNT} e \campo{ACLWDNTC}. \campo{ACHFX}, \campo{ACLHF}, \campo{ACGRDFLX} e
+\campo{NOAHRES} sono nulli perché sono accumulatori dello schema di superficie Noah, e questa
+simulazione usa RUC. Un campo identicamente nullo non si pubblica, qualunque sia la ragione.
+
+Per altri campi non nulli nessun parametro ECMWF descrive la stessa grandezza: la frazione congelata
+della precipitazione (\campo{SR}), la densità della neve che cade (\campo{RHOSNF}), i massimi e minimi
+annuali della frazione di vegetazione verde (\campo{SHDMAX}, \campo{SHDMIN}) e la temperatura del suolo
+profondo usata come condizione al contorno inferiore (\campo{TMN}). Il deflusso accumulato
+\campo{ACRUNOFF} coincide con il deflusso superficiale \campo{SFROFF}, ed è già in \campo{sro}.
+
+Cinque campi non nulli restano fuori anche se ECMWF definisce un parametro per la stessa grandezza,
+perché ERA5 non lo pubblica e l'archivio segue lo schema di ERA5 (\cref{tab:non-pubblicati}).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Campi non nulli dei file wrfout con un parametro ECMWF che ERA5 non pubblica.}
+  \label{tab:non-pubblicati}
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    \toprule
+    Campo WRF & Parametro ECMWF \\
+    \midrule
+    \campo{SNOALB}     & 260161 \campo{mxsalb}, albedo massima della neve \\
+    \campo{QGRAUP}     & 260028 \campo{grle} e 260001 \campo{tcolg}, graupel e sua colonna (\cref{sec:colonne}) \\
+    \campo{REFL_10CM}  & 260134 \campo{bref}, riflettività radar \\
+    \campo{LPI}        & famiglia 228050 \campo{litoti}; \campo{LPI} è però un indice di potenziale di fulminazione, non una densità di fulmini \\
+    \campo{SNOWFALLAC} & 3066 \campo{sde}, perché è uno spessore geometrico della neve e non un'acqua equivalente \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

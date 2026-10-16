@@ -91,3 +91,17 @@ dmypy.json
 .env.local
 prompts/
 CHAPTER_INPUT/
+
+# LaTeX build products (report/)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.toc
+*.run.xml
+*.log
+*.out
+*.synctex.gz
+*.xdv

@@ -1,0 +1,96 @@
+\chapter{The simulation}
+\label{cap:simulazione}
+
+CHAPTER is a regional reanalysis produced with the WRF model, version 4.1.1 \parencite{wrf411}.
+The CHAPTER GRIB2 archive holds the hourly wrfout files of the simulation converted to GRIB2, with
+ECMWF parameter names and codes.
+
+\section{Domain, grid and period}
+\label{sec:dominio}
+
+The simulation uses domain d02, a Mercator grid of $\num{1641} \times \num{1353}$ cells with a
+spacing of \SI{3}{km}, i.e.\ \num{2220273} points per field. The standard parallel of the
+projection is \ang{44.671} N. The domain extends from \ang{23.4719} to \ang{60.0006} north
+latitude and from \ang{19.9722} W to \ang{42.2555} E. Vertically the model has 49 levels, with the
+top at \SI{50}{\hPa}. WRF integrates the equations on a sphere of radius \SI{6370}{km}, and the
+archive declares the same sphere in the grid definition (\cref{sec:geometria}).
+
+The archive covers, at hourly resolution, the years 2019 and 2024 and the period from 1 January to
+2 July 2025, for \num{21936} validity times. The last validity time produced by the simulation is
+2 July 2025 at 23 UTC. Each daily run starts at 18 UTC on the day before the one it is dedicated to
+and integrates for \SI{30}{h}; its first \SI{6}{h} are spin-up and are not part of the archive. Day
+D consists of the validity times from 01 to 23 UTC of the run started at 18 UTC on D$-1$, and its
+00 UTC validity time is the last hour, the thirtieth, of the run started at 18 UTC on D$-2$
+(\cref{sec:tempo,sec:cambio-run}).
+
+\section{Physical configuration}
+\label{sec:configurazione}
+
+\Cref{tab:configurazione} lists the simulation options on which the content of the archive
+depends, read from the global attributes of the wrfout files. They are the same in the three
+periods checked: 2019, March 2024 and July 2024.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Simulation options that determine which fields the archive can contain.}
+  \label{tab:configurazione}
+  \begin{tabularx}{\textwidth}{@{}lllX@{}}
+    \toprule
+    Option & Value & Scheme & Consequence for the archive \\
+    \midrule
+    \campo{BL_PBL_PHYSICS}     & 1 & YSU      & nonlocal scheme, without prognostic turbulent kinetic energy \\
+    \campo{KM_OPT}             & 4 &          & the diffusion produces no turbulent kinetic energy \\
+    \campo{SF_OCEAN_PHYSICS}   & 0 &          & ocean not simulated: no currents and no sea surface height \\
+    no wave model              &   &          & no wave fields \\
+    \campo{SST_UPDATE}         & 0 &          & sea surface temperature constant within each daily run \\
+    \campo{CU_PHYSICS}         & 0 &          & resolved convection; \campo{RAINC} identically zero \\
+    \campo{MP_PHYSICS}         & 6 & WSM6     & cloud water, rain, ice, snow and graupel; no hail \\
+    \campo{ICLOUD}             & 1 & Xu--Randall & continuous cloud fraction between 0 and 1 \\
+    \campo{SF_SURFACE_PHYSICS} & 3 & RUC      & soil on six nodes at \SIlist{0;5;20;40;160;300}{cm} \\
+    \campo{SF_LAKE_PHYSICS}    & 0 &          & no lake model \\
+    \campo{SF_URBAN_PHYSICS}   & 0 &          & no urban scheme \\
+    \campo{aer_opt}            & 0 &          & radiation without aerosols \\
+    \campo{usemonalb}          & \campo{.false.} & & background albedo from a table, not from satellite \\
+    \campo{rdlai2d}            & \campo{.false.} & & leaf area index from a table per category \\
+    \campo{isfflx}             & 1 &          & turbulent surface fluxes computed at every time step \\
+    \campo{output_diagnostics} & 0 &          & no hourly extremes of \SI{2}{m} temperature \\
+    \campo{nwp_diagnostics}    & 1 &          & hourly maximum of the \SI{10}{m} wind and six other hourly maxima \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The radiation scheme is RRTMG, with the CAM ozone climatology (\campo{o3input=2}). The WSM6
+microphysics carries five condensed species, among them graupel, which ERA5 does not publish as a
+separate field (\cref{sec:colonne}).
+
+In the RUC surface scheme the background albedo, the leaf area index and the roughness length are
+table values per dominant category, i.e.\ per land-use class with the largest fraction in the
+cell. For this reason \campo{al} takes 8 to 11 values over the whole domain and \campo{fsr}, away
+from snow, one value per category (\cref{cap:superficie,cap:suolo}).
+
+Turbulent kinetic energy, waves, currents and sea surface height do not exist in this simulation.
+The boundary-layer height and the sensible and latent heat fluxes, by contrast, were computed but
+not written to the wrfout files (\cref{cap:limiti}).
+
+\section{The static file}
+\label{sec:file-statico}
+
+The static information on soil, vegetation and lakes comes from the static file
+\campo{geo_em.d02}, produced by the WRF preprocessor (WPS) for this simulation. Its land-use
+category (\campo{LU_INDEX}) coincides with the dominant category written every hour in the wrfout
+files (\campo{IVGTYP}) on \SI{100.00}{\percent} of the cells in July 2019 and in January 2025, once
+the reclassification of lakes as water is excluded; the model applies that reclassification
+because the lake physics is switched off. On 15 February 2025 at 12 UTC the agreement drops to
+\SI{99.98}{\percent}: the \num{2735} differing cells all carry sea ice, which the model
+reclassifies as land at every hour (\cref{sec:statici-orari}).
+
+Land use is expressed in 21 MODIS-IGBP classes (\campo{MMINLU=MODIFIED_IGBP_MODIS_NOAH}). The
+static file carries the fraction of each class for every cell, whereas the wrfout files keep only
+the dominant category. On average the dominant category occupies \SI{90.1}{\percent} of a land
+cell, and \SI{17.93}{\percent} of land cells have both high and low vegetation above
+\SI{5}{\percent}. The soil texture and the lake depth also come from the static file. The static
+file made fifteen fields possible: the vegetation covers and types (\campo{cvl}, \campo{cvh},
+\campo{tvl}, \campo{tvh}), the soil type (\campo{slt}), the lake cover and depth (\campo{cl},
+\campo{dl}) and the eight soil moisture and temperature fields on the ERA5 layers, to which it
+supplies the permanent land mask (\cref{cap:suolo}).

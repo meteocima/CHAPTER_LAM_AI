@@ -1,0 +1,295 @@
+\chapter{Atmosphere}
+\label{cap:atmosfera}
+
+\section{Pressure-level variables}
+\label{sec:livelli-pressione}
+
+\Cref{tab:var-pressione} lists the 13 pressure-level variables, 169 messages in all. Besides
+temperature, wind, humidity and geopotential, they include the two forms of vertical velocity, in
+pressure (\campo{w}) and geometric (\campo{wz}), the cloud fraction and four cloud and
+precipitation water contents.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Variables on the 13 pressure levels.}
+  \label{tab:var-pressione}
+  \begin{tabular}{@{}lrll@{}}
+    \toprule
+    Field & paramId & Description & Units \\
+    \midrule
+    \campo{cc}   & 248    & cloud fraction & 0--1 \\
+    \campo{ciwc} & 247    & specific cloud ice water content & \si{kg/kg} \\
+    \campo{clwc} & 246    & specific cloud liquid water content & \si{kg/kg} \\
+    \campo{crwc} & 75     & specific rain water content & \si{kg/kg} \\
+    \campo{cswc} & 76     & specific snow water content & \si{kg/kg} \\
+    \campo{q}    & 133    & specific humidity & \si{kg/kg} \\
+    \campo{r}    & 157    & relative humidity & \si{\percent} \\
+    \campo{t}    & 130    & temperature & \si{K} \\
+    \campo{u}    & 131    & zonal wind component & \si{m/s} \\
+    \campo{v}    & 132    & meridional wind component & \si{m/s} \\
+    \campo{w}    & 135    & vertical velocity in pressure & \si{Pa/s} \\
+    \campo{wz}   & 260238 & geometric vertical velocity & \si{m/s} \\
+    \campo{z}    & 129    & geopotential & \si{m^2/s^2} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Specific contents.} WRF carries vapor and hydrometeors as \emph{mixing ratios}, per
+kilogram of dry air. ECMWF defines \campo{q} and the water contents as \emph{specific contents},
+per kilogram of moist air, and the mass of moist air comprises dry air, vapor, cloud water, ice,
+rain and snow \parencite{paramdb}. The archive therefore divides \campo{q}, \campo{clwc},
+\campo{ciwc}, \campo{crwc}, \campo{cswc} and the column integrals by the same denominator,
+$1 + r_t$, where $r_t$ is the total water mixing ratio. On the three-dimensional field the
+correction is \SI{0.011}{\percent} in the median, \SI{1.44}{\percent} at the 99th percentile and
+\SI{2.26}{\percent} at most.
+
+\paragraph{Cloud fraction.} With the Xu--Randall scheme the cloud fraction \campo{cc} is
+continuous. On a subdomain of $500 \times 600$ cells only between \SI{18}{\percent} and
+\SI{22}{\percent} of the cloudy points are exactly 1, and the others span the whole interval from
+0 to 1.
+
+\paragraph{Relative humidity.} The field \campo{r} is ECMWF's relative humidity, computed over the
+mixed phase with equations 7.5, 7.6, 7.89 and 7.90 of the IFS Cy41r2 documentation, the cycle
+with which ERA5 was produced \parencite{era5doc}, and with the constants of that cycle
+\parencite{ifs41r2p4}. The saturation vapor pressure is
+\begin{equation}
+  e_\text{sat}(T) = \alpha(T)\, e_\text{sat,w}(T) + \bigl(1 - \alpha(T)\bigr)\, e_\text{sat,i}(T),
+  \qquad
+  \alpha(T) = \left(\frac{T - T_\text{ice}}{T_0 - T_\text{ice}}\right)^{2},
+  \label{eq:fase-mista}
+\end{equation}
+where $T$ is the temperature, $e_\text{sat,w}$ and $e_\text{sat,i}$ are the saturation vapor
+pressures over water and over ice (Tetens formula), $T_\text{ice} = \SI{250.16}{K}$,
+$T_0 = \SI{273.16}{K}$, and $\alpha$ is 0 below $T_\text{ice}$ and 1 above $T_0$. Below
+$T_\text{ice}$ this relative humidity differs by up to a factor of \num{1.8} from the one computed
+over liquid water. The field is not truncated at \SI{100}{\percent}, because supersaturation is a
+state of the model and ERA5 publishes it too. In the hourly file of 15 July 2024 at 12 UTC,
+\campo{r} reaches \SI{139.7}{\percent} at \SI{300}{\hPa} in the ice regime, and \num{34785} points
+exceed \SI{100}{\percent} at \SI{400}{\hPa}. An ingestion pipeline that discards values above
+\SI{100}{\percent} discards valid data.
+
+\paragraph{Geopotential.} The published geopotential is $z = g_0\, z_\text{WRF}$, with
+$g_0 = \SI{9.80665}{m/s^2}$ the standard gravity and $z_\text{WRF}$ the geopotential height of the
+model. Dividing \campo{z} by $g_0$ recovers the model height exactly, at the surface and on every
+pressure level. The surface geopotential and the pressure-level geopotential follow the same
+convention, verified point by point on the \num{1349910} land cells with elevation above \SI{1}{m} on
+15 July 2024 at 12 UTC. WRF, however, integrates the hydrostatic equation with
+$g = \SI{9.81}{m/s^2}$, so the archive departs by \SI{0.034}{\percent} from hydrostatic balance
+with its own \campo{t} and pressure. This is one part in \num{2900}, about \SI{2}{m} at
+\SI{500}{\hPa} and \SI{7}{m} at \SI{50}{\hPa} \parencite{issue39}. The two properties, \campo{z}
+divided by $g_0$ equal to the model height and hydrostatic balance with the model's \campo{t} and
+pressure, cannot hold together.
+
+\section{Below ground}
+\label{sec:sotto-terreno}
+
+Where a pressure level lies below ground, the archive publishes the value of the lowest model
+level as it is, without extrapolating or filling (\emph{clamping}). Below ground \campo{t}
+coincides exactly with the lowest model level, \campo{q} within \SI{1e-9}{kg/kg} and \campo{z}
+within \SI{2.5e-4}{m} \parencite{issue44}. The value is a real state of the model, taken between
+\SI{24}{m} and \SI{27}{m} above ground, and it stays consistent with the near-surface fields. In
+July, $\campo{2t} - \campo{t}(\SI{1000}{\hPa})$ below ground is \SI{-0.9}{K} at midnight and
+\SI{+1.4}{K} at noon, that is, a nocturnal inversion and a daytime superadiabatic layer in the
+roughly \SI{22}{m} between the \SI{2}{m} level and the lowest model level. Below ground \campo{r}
+reaches about \SI{163}{\percent}, because it pairs the humidity of the lowest model level with the
+nominal pressure of \SI{1000}{\hPa}.
+
+The cost is that \campo{z} contradicts \campo{sp}. Where the surface pressure places
+\SI{1000}{\hPa} below ground, the geopotential published at \SI{1000}{\hPa} places it, in the
+median, between \SI{24}{m} and \SI{27}{m} above. This occurs on \SI{47.6}{\percent} of the domain
+at \SI{1000}{\hPa} and on \SI{9}{\percent} at \SI{925}{\hPa}. ERA5 instead extrapolates below
+ground with a temperature lapse rate, and the two archives differ by convention precisely where
+\SI{1000}{\hPa} is below ground. The whole difference at \SI{1000}{\hPa} comes from this: on the
+verification sample the bias of \campo{t} against ERA5 is \SI{-1.71}{K} at \SI{1000}{\hPa} against
+\SI{-0.05}{K} at \SI{850}{\hPa}, and the correlation of \campo{z} with ERA5 at \SI{1000}{\hPa} is
+\num{0.108}. For a comparison with ERA5 or for computing thicknesses, the below-ground levels
+must be masked with \campo{sp}, which is in the same hourly file.
+
+\section{The \SI{50}{\hPa} level}
+\label{sec:livello-50}
+
+The model top is at \SI{50}{\hPa} (\cref{sec:dominio}), and the highest model level at which WRF
+defines temperature always lies below it, for example at \SI{51.9}{\hPa} on average over the domain
+on 19 January 2024 at 00 UTC. The \SI{50}{\hPa} pressure level therefore lies above the highest
+model level, and the vertical interpolation repeats the
+values of that level there, as the clamping does below ground (\cref{sec:sotto-terreno}). At that
+validity time \campo{t} at \SI{50}{\hPa} equals the temperature of the highest model level to
+within the encoding precision, \SI{0.009}{K}, and $\campo{z}/g_0$ equals its geopotential height to
+within \SI{1}{m}; the same holds for the other fields at \SI{50}{\hPa}. At the same validity time the
+layer between the highest model level and \SI{50}{\hPa} has a hydrostatic thickness of \SI{227}{m}
+on average, between \SI{214}{m} and \SI{239}{m} over the domain, and $\campo{z}/g_0$ at
+\SI{50}{\hPa} lies that much below the height of the \SI{50}{\hPa} pressure level. The thickness
+between \SI{100}{\hPa} and \SI{50}{\hPa} computed from the archive, \SI{4009}{m} on average, is
+therefore about \SI{5.4}{\percent} short of the hydrostatic thickness, about \SI{4236}{m}. A
+geostrophic wind computed from \campo{z} at \SI{50}{\hPa} is affected by the horizontal variation of
+the missing thickness, \SI{25}{m} between its minimum and maximum over the domain.
+
+\section{Near-surface fields}
+\label{sec:vicino-superficie}
+
+\Cref{tab:var-quota} lists the fields at fixed height above ground and the mean sea level
+pressure.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Fields at fixed height and mean sea level pressure.}
+  \label{tab:var-quota}
+  \begin{tabular}{@{}lrlll@{}}
+    \toprule
+    Field & paramId & Description & Units & Height \\
+    \midrule
+    \campo{10u}, \campo{10v}   & 165, 166       & wind components & \si{m/s} & \SI{10}{m} \\
+    \campo{100u}, \campo{100v} & 228246, 228247 & wind components & \si{m/s} & \SI{100}{m} \\
+    \campo{200u}, \campo{200v} & 228239, 228240 & wind components & \si{m/s} & \SI{200}{m} \\
+    \campo{10fg} & 49     & hourly maximum of the resolved wind & \si{m/s} & \SI{10}{m} \\
+    \campo{2t}   & 167    & temperature & \si{K} & \SI{2}{m} \\
+    \campo{2d}   & 168    & dewpoint temperature & \si{K} & \SI{2}{m} \\
+    \campo{2r}   & 260242 & relative humidity & \si{\percent} & \SI{2}{m} \\
+    \campo{vwsh} & 260068 & vertical wind shear between \SI{10}{m} and \SI{100}{m} & \si{s^{-1}} & \SI{100}{m} \\
+    \campo{msl}  & 151    & mean sea level pressure & \si{Pa} & sea level \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Relative humidity at \SI{2}{m}.} \campo{2r} is the relative humidity over liquid water
+at every temperature, the World Meteorological Organization convention for screen-level humidity
+measurements \parencite{wmo8}, that is, for the observations against which a \SI{2}{m} humidity is
+compared. ERA5 does not publish a relative humidity at \SI{2}{m}. \campo{r} and \campo{2r}
+therefore follow two different definitions and differ where the temperature is below $T_0$. A
+profile that places \campo{2r} at the base of \campo{r}, or a vertical humidity gradient computed
+between the two, mixes two quantities. Recomputing the relative humidity from
+\campo{q}, \campo{t} and \campo{sp}, all of which are published, puts both in the same convention.
+
+\paragraph{Dewpoint temperature.} The inversion that derives the dewpoint temperature from the
+vapor gives, at saturated points, a \campo{2d} that exceeds \campo{2t} by \SI{0.0133}{K}, the same
+at every validity time and in every season. At four validity times in January 2024, July 2024
+and February 2025 these points number between \num{6161} and \num{64005}, all with a relative
+humidity of \SI{100}{\percent} \parencite{issue42}. The value is left as it is. Truncating
+\campo{2d} at \campo{2t} would remove the visible crossings but leave the same offset at every
+unsaturated point, introduce a kink in the field at \SI{100}{\percent} and break the consistency
+between \campo{2d} and the model's \SI{2}{m} vapor (\campo{Q2}), which holds within a relative
+error between \num{3.6e-4} and \num{1.1e-2} on the vapor pressure. A relative humidity
+reconstructed from \campo{2t} and \campo{2d} therefore reaches \SI{100.09}{\percent}.
+
+\section{Columns and clouds}
+\label{sec:colonne}
+
+\Cref{tab:var-colonna} lists the column integrals and the cloud covers.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Column integrals and cloud covers.}
+  \label{tab:var-colonna}
+  \begin{tabular}{@{}lrll@{}}
+    \toprule
+    Field & paramId & Description & Units \\
+    \midrule
+    \campo{tcwv} & 137    & total column water vapor & \si{kg/m^2} \\
+    \campo{tclw} & 78     & total column cloud liquid water & \si{kg/m^2} \\
+    \campo{tciw} & 79     & total column cloud ice water & \si{kg/m^2} \\
+    \campo{tcrw} & 228089 & total column rain water & \si{kg/m^2} \\
+    \campo{tcsw} & 228090 & total column snow water & \si{kg/m^2} \\
+    \campo{tcw}  & 136    & total column water & \si{kg/m^2} \\
+    \campo{tcc}  & 164    & total cloud cover & 0--1 \\
+    \campo{hcc}  & 188    & high cloud cover & 0--1 \\
+    \campo{mcc}  & 187    & medium cloud cover & 0--1 \\
+    \campo{lcc}  & 186    & low cloud cover & 0--1 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Total water.} ECMWF defines \campo{tcw} as the sum of five species, vapor, liquid
+water, ice, rain and snow \parencite{paramdb}. The archive sums six species, because it includes
+graupel \parencite{issue47}. ECMWF defines a graupel content (paramId 260028, \campo{grle}) and
+its column (260001, \campo{tcolg}) \parencite{paramdb}, but ERA5 publishes neither, and graupel
+appears only inside \campo{tcw}. Reconstructing \campo{tcw} as $\campo{tcwv} + \campo{tclw} +
+\campo{tciw} + \campo{tcrw} + \campo{tcsw}$ does not reproduce it, and the residual is the graupel
+column. At the four validity times examined, 15 January, April, July and October 2024 at 12 UTC, the
+residual is, as a domain mean, \SI{0.4}{\percent} of the condensate. Its maximum is
+\SI{5.69}{kg/m^2} in January, \SI{13.89}{kg/m^2} in April, \SI{16.73}{kg/m^2} in October and
+\SI{26.46}{kg/m^2} in July, in a convective cell where it exceeds all the rest of the column's
+condensate.
+
+\paragraph{Cloud cover.} \campo{tcc}, \campo{hcc}, \campo{mcc} and \campo{lcc} are maximum-random
+overlaps of WRF's cloud fraction \campo{CLDFRA}. On the verification sample, with the CHAPTER
+fields aggregated onto the ERA5 grid, the ratio of means is \num{0.783} for total cloud cover and
+\num{0.610} for high cloud cover (\cref{tab:nubi}), and CHAPTER total cloud cover is lower than ERA5's at
+every one of the 34 validity times \parencite{issue48}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Cloud covers and total column cloud ice water (\si{kg/m^2}): means over the
+  verification sample, on the ERA5 grid.}
+  \label{tab:nubi}
+  \begin{tabular}{@{}lSSS@{}}
+    \toprule
+    Field & {CHAPTER} & {ERA5} & {Ratio of means} \\
+    \midrule
+    \campo{tcc}  & 0.381  & 0.487  & 0.783 \\
+    \campo{hcc}  & 0.169  & 0.276  & 0.610 \\
+    \campo{mcc}  & 0.161  & 0.205  & 0.786 \\
+    \campo{lcc}  & 0.231  & 0.268  & 0.862 \\
+    \campo{tciw} & 0.0185 & 0.0166 & 1.109 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The gap does not come from the overlap assumption. Computed point by point on the archive's
+\campo{CLDFRA}, the whole range of possible assumptions, from maximum to random overlap, is
+\SIrange{2}{4}{\percent} wide, while ERA5 total cloud cover exceeds CHAPTER's by
+\SI{28}{\percent}, so the assumption accounts for at most one seventh of the gap. The gap lies in
+\campo{CLDFRA} itself, the Xu--Randall diagnostic. Total column cloud ice is \num{1.109} times
+ERA5's while \campo{hcc} is \num{0.610} times, so the scheme assigns to the condensate present a
+smaller cloud fraction than ERA5 does. Part of the gap comes from resolution. CHAPTER cloud cover is
+overlapped at \SI{3}{km} and then aggregated, whereas ERA5 cloud cover is overlapped on a profile
+already smooth at \SI{31}{km}, which for equal layer fractions gives a larger cloud cover. This effect
+too is bounded by the same range, between \SI{2}{\percent} and \SI{4}{\percent}.
+
+\section{Instability}
+\label{sec:instabilita}
+
+\campo{mucape} (paramId 228235) and \campo{mucin} (228236), in \si{J/kg}, are the convective
+available potential energy (CAPE) and the convective inhibition of the most unstable parcel, that
+is, the parcel mixed over \SI{500}{m} with the highest equivalent potential temperature in the
+lowest \SI{3}{km}. They are not computed from the surface.
+
+The routine that computes the two quantities returns an inhibition only in columns with CAPE of
+at least \SI{100}{J/kg}, and elsewhere \campo{mucin} is a missing point (bitmap). A zero in those
+columns would state that nothing suppresses convection precisely where it is suppressed most,
+because a column without CAPE is normally a column with strong inhibition. Where \campo{mucin} is
+missing, ERA5 carries a mean inhibition between \SI{25}{J/kg} and \SI{265}{J/kg}. Filling the
+missing points with zeros would teach a statistical model that situations with little CAPE have
+no inhibition, the opposite of the physics.
+
+The fraction of the domain in which \campo{mucin} is present ranges from \SI{3.8}{\percent} in
+January to \SI{28.8}{\percent} in July (\cref{tab:mucin}). Where it is present, \campo{mucin} is
+between \num{0.03} and \num{0.24} times ERA5's, because the columns in which it exists are the
+least inhibited.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Fraction of the domain in which \campo{mucin} is present, at 12 UTC.}
+  \label{tab:mucin}
+  \begin{tabular}{@{}lSS@{}}
+    \toprule
+    Validity time & {Present (\si{\percent})} & {Missing (\si{\percent})} \\
+    \midrule
+    2024-01-15 & 3.8  & 96.2 \\
+    2024-02-15 & 5.7  & 94.3 \\
+    2024-03-15 & 4.8  & 95.2 \\
+    2024-07-15 & 28.8 & 71.2 \\
+    2024-10-15 & 15.2 & 84.8 \\
+    2025-02-15 & 5.5  & 94.5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\campo{mucape}, by contrast, is dense, with no missing points: where the routine finds no CAPE,
+the published zero is the correct value. It is zero at \num{1536450} of the \num{2220273} points
+(\SI{69.2}{\percent}) on 15 February 2024 and at \num{1020809} (\SI{46.0}{\percent}) on 15 July
+2024, both at 12 UTC, and at \num{744745} (\SI{33.5}{\percent}) on 4 September 2024 at 15 UTC.

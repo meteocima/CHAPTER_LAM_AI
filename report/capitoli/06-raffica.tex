@@ -1,0 +1,86 @@
+\chapter{Vento a 10 m e raffica}
+\label{cap:raffica}
+
+\section{Il campo \texorpdfstring{\campo{10fg}}{10fg}}
+\label{sec:10fg}
+
+Il campo \campo{10fg} (paramId 49) è la velocità massima del vento a \SI{10}{m} che la simulazione
+ha prodotto nell'ora precedente l'istante di validità. Viene da \campo{WSPD10MAX}, uno dei massimi
+orari che WRF scrive con \campo{nwp_diagnostics=1}. È un \emph{vento risolto}: non contiene un
+termine turbolento né una stima di ciò che la griglia non rappresenta \parencite{issue50}.
+
+La raffica di ERA5 è un'altra grandezza. L'Organizzazione Meteorologica Mondiale definisce la
+raffica come il massimo del vento mediato su \SI{3}{s}, un intervallo più breve di un passo temporale
+di un modello a \SI{31}{km}, e ERA5 ne pubblica una stima, la \emph{raffica parametrizzata}
+\parencite{paramdb}. Nell'IFS la raffica parametrizzata è il vento medio a \SI{10}{m} più un termine
+turbolento proporzionale alla velocità d'attrito, più, in condizioni convettive, un termine
+proporzionale allo shear del vento nello strato \SIrange{850}{950}{\hPa} \parencite[sez.~3.10.4,
+eq.~3.99]{ifs41r2p4}. L'IFS la calcola a ogni passo temporale e ne archivia il massimo dall'ultima
+scrittura.
+
+La simulazione regionale riceve da ERA5 lo stato dell'atmosfera e della superficie, non i campi
+diagnostici. La tabella standard dei campi ECMWF di WPS 4.1 (\campo{Vtable.ECMWF}) non contiene né il
+paramId 49 né il 228029 \parencite{wps41}; la tabella usata da questa simulazione non è stata
+verificata. Fra le 200 variabili di un file wrfout nessun campo di raffica si aggiunge a
+\campo{WSPD10MAX}, e il campo pubblicato come \campo{10fg} è il più vicino a una raffica che la
+simulazione offra.
+
+\section{Confronto con ERA5}
+\label{sec:10fg-era5}
+
+La \cref{tab:10fg} riporta il confronto su 16 istanti di validità. \campo{10fg} vale 0,625 volte il
+\campo{10fg} di ERA5 e 0,644 volte la raffica parametrizzata istantanea \campo{i10fg}, con
+correlazioni di 0,813 e 0,820. Rispetto al vento istantaneo a \SI{10}{m} dello stesso file vale fra
+1,004 e 1,032 volte, e in nessuno dei \num{2220273} punti è più basso. Sotto il paramId 49
+l'archivio pubblica la velocità del vento a \SI{10}{m}, mentre la raffica parametrizzata di ERA5 vale
+circa 1,6 volte il suo vento medio. Il rapporto con il \campo{10fg} di ERA5 resta fra 0,593 e 0,673 in
+tutti i 34 istanti del campione di verifica, in ogni mese e a ogni ora, ed è una
+differenza di definizione.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{\campo{10fg} dell'archivio rispetto a tre riferimenti, su 16 istanti di validità.}
+  \label{tab:10fg}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Riferimento & CHAPTER / riferimento & Correlazione \\
+    \midrule
+    \campo{10fg} di ERA5 (raffica parametrizzata, massimo orario) & 0,625 & 0,813 \\
+    \campo{i10fg} di ERA5 (raffica parametrizzata, istantanea) & 0,644 & 0,820 \\
+    vento istantaneo a \SI{10}{m} di CHAPTER, stesso file & 1,004--1,032 & \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+A \SI{3}{km} una parte di ciò che ERA5 deve parametrizzare è risolta, come mostra la velocità
+d'attrito sulla terra, fra 1,62 e 2,06 volte quella di ERA5 (\cref{sec:rugosita}). Letto come
+raffica, \campo{10fg} sottostima di circa il \SI{38}{\percent}, e nessuna correzione del bias lo rende
+una raffica, perché è una grandezza diversa. Con una correlazione di 0,813 con il \campo{10fg} di
+ERA5 il campo si presta a ordinare luoghi e ore per ventosità e a descrivere la struttura spaziale
+del vento, e fa da limite inferiore della raffica; non si presta a stimare il superamento di una
+soglia di raffica.
+
+\section{La finestra oraria}
+\label{sec:10fg-finestra}
+
+I messaggi di \campo{10fg} dichiarano un massimo sull'ora precedente (\cref{sec:tempo}). Anche la
+raffica parametrizzata oraria di ERA5 è un massimo sull'ora precedente, e la lunghezza della
+finestra non è la differenza fra i due campi. La codifica è corretta. WRF azzera \campo{WSPD10MAX}
+alla scrittura di ogni file wrfout, ma su sei giorni interi, il 15 luglio 2019 e il 1º e 15 febbraio,
+20 marzo, 15 luglio e 15 agosto 2024, per 138 passaggi da un'ora alla successiva, l'azzeramento è
+mancato 17 volte, il \SI{12.3}{\percent} dei casi \parencite{issue49}. In quelle ore il campo
+contiene il massimo su due ore o più, sotto un messaggio che ne dichiara una.
+
+L'effetto si vede nell'eccesso medio rispetto al vento istantaneo a \SI{10}{m}:
+\SIrange{0.068}{0.311}{m/s} nelle ore azzerate, \SIrange{0.499}{0.784}{m/s} in quelle non
+azzerate. Su una media di dominio di circa \SI{4.5}{m/s} è una sovrastima di
+\SIrange{10}{17}{\percent}. Nelle ore non azzerate il campo si avvicina alla raffica parametrizzata di
+ERA5 perché la finestra è più lunga, e il valore non permette di riconoscerle. Neppure gli altri campi
+del file lo permettono: i sette massimi orari di WRF si azzerano con lo stesso evento e, quando
+l'azzeramento manca, restano tutti insieme, per cui nessuno di essi segnala il mancato azzeramento
+degli altri. Riconoscerle richiede il file wrfout dell'ora precedente, che al momento della
+conversione non è disponibile. Il meccanismo del mancato azzeramento non è stato stabilito.
+
+Nelle statistiche su una stagione il \SI{12.3}{\percent} delle ore porta una finestra più lunga di
+quella dichiarata; per un'ora singola la finestra dichiarata di \campo{10fg} non è garantita.

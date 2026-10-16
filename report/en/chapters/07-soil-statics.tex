@@ -1,0 +1,202 @@
+\chapter{Water, soil, snow and static fields}
+\label{cap:suolo}
+
+\section{Precipitation and runoff}
+\label{sec:precipitazione}
+
+Precipitation and runoff are fields accumulated over the hour ending at the validity time
+(\cref{sec:tempo}). Total precipitation
+\campo{tp} (paramId 228, \si{m}) is WRF's resolved precipitation \campo{RAINNC}, which is complete
+because the convective precipitation \campo{RAINC} is identically zero (\campo{CU_PHYSICS=0},
+\cref{tab:configurazione}). Snowfall \campo{sf} (144, \si{m} of water equivalent) is the sum of
+resolved snow and graupel, $\campo{SNOWNC} + \campo{GRAUPELNC}$, that is, all solid precipitation,
+as in the ECMWF definition \parencite{paramdb}. Rainfall \campo{tirf} (235015, \si{kg/m^2}) is total
+precipitation minus snow and graupel; the microphysics has no hail. The three fields form a closed budget. With
+\campo{tirf} converted to metres, $\campo{tp} - \campo{sf} - \campo{tirf}$ is at most
+\SI{7.8e-8}{m} at the worst point, on 15 February and 15 July 2024 at 12 UTC.
+
+The three runoff fields, surface (\campo{sro}, paramId 8), subsurface (\campo{ssro}, 9) and total
+(\campo{ro}, 205), carry the information of a single field, and the archive publishes all three
+\parencite{issue51}. At eight validity times of 2024 (four in \cref{tab:deflusso}), 15 January,
+February, March and August at 12 UTC and 15 July at 00, 06, 12 and 18 UTC, \campo{ssro} is
+identically zero at four and, at the others, is non-zero at no more than 17 of the \num{2220273}
+grid points. At every point of the eight validity times, $|\campo{ro} - \campo{sro} - \campo{ssro}|$
+does not exceed \SI{7.5e-9}{m}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Domain means of the runoff fields, accumulated over the hour ending at the validity time,
+  in \si{m}, and number of grid points where \campo{ssro} is non-zero.}
+  \label{tab:deflusso}
+  \begin{tabular}{@{}lSSrS@{}}
+    \toprule
+    Validity time & {\campo{sro}} & {\campo{ssro}} & Points \campo{ssro} $\neq 0$ & {\campo{ro}} \\
+    \midrule
+    2024-02-15 12 UTC & 4.819e-6 & 0       & 0  & 4.819e-6 \\
+    2024-07-15 12 UTC & 5.543e-6 & 2.2e-9  & 3  & 5.545e-6 \\
+    2024-07-15 18 UTC & 1.829e-5 & 1.5e-9  & 2  & 1.829e-5 \\
+    2024-08-15 12 UTC & 2.334e-6 & 0       & 0  & 2.334e-6 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\campo{ssro} is the hourly increment of \campo{UDROFF}, the model's subsurface runoff accumulator.
+The accumulator is non-zero at \numrange{462}{8363} points, with maxima of \SIrange{11}{106}{mm}. In the
+run started at 18 UTC on 14 July 2024 the same \num{1647} points carry subsurface runoff at its
+sixth, twelfth, eighteenth and twenty-fourth hours (00, 06, 12 and 18 UTC on 15 July), only 19 of
+them grow between the sixth and the twenty-fourth hour, and in a single hour no more than 17 grow.
+
+Relative to ERA5, with the accumulations of both reanalyses summed over the hours from 01 UTC to
+the validity time, \campo{sro} is \numrange{1.0}{4.6} times, \campo{ssro}
+\numrange{0.000}{0.004} times and \campo{ro} \numrange{0.19}{0.85} times the ERA5 value. In
+ERA5 the largest term is subsurface runoff, which in the archive is almost everywhere zero
+(\cref{tab:deflusso}).
+
+\section{Soil}
+\label{sec:suolo}
+
+Volumetric soil water \campo{swvl1-4} (paramId 39--42, \si{m^3/m^3}) and soil temperature
+\campo{stl1-4} (139, 170, 183, 236, \si{K}) are given on the four ERA5 layers, 0--7, 7--28, 28--100
+and \SIrange{100}{289}{cm}. The RUC scheme instead carries point values at six nodes, at
+\SIlist{0;5;20;40;160;300}{cm}, with a linear profile between each node and the next. The four ERA5
+layers lie between the first and the last node, because ERA5 starts at \SI{0}{cm}, where the first
+node sits, and ends at \SI{289}{cm}, above the node at \SI{300}{cm}. Each layer is therefore the
+exact average, over the layer, of the model's linear profile, with no extrapolation at either end.
+Each layer is a weighted combination of three consecutive nodes, at 0, 5 and \SI{20}{cm}, at 5, 20
+and \SI{40}{cm}, at 20, 40 and \SI{160}{cm} and at 40, 160 and \SI{300}{cm}, with weights that sum
+to 1. \campo{swvl} uses the total soil moisture, liquid plus frozen, which is what the ERA5 name
+denotes.
+
+The eight fields are defined on the permanent land of the static file, and sea ice has no soil
+column, as in ERA5, whose land--sea mask is permanent. Where sea ice forms, WRF reclassifies the
+cell as land, assigns it soil type 16 and fills the soil column with water: \campo{swvl} reaches
+exactly \num{1.000}, against a porosity of \num{0.435} for that soil type. Those columns are a model
+state but not a soil, and the archive masks them. The ice itself stays in the file, in \campo{ci}.
+
+\section{Snow}
+\label{sec:neve}
+
+The archive carries the snow water equivalent \campo{sd} (paramId 141, \si{m}), the snow density
+\campo{rsn} (33, \si{kg/m^3}), the snow cover \campo{snowc} (260038, \si{\percent}) and the
+temperature of the snow layer \campo{tsn} (238, \si{K}). \campo{tsn} is \campo{SOILT1}, the
+temperature of the first level of the model's combined snow and soil column, and where snow does
+not cover the cell that level is soil. The field is therefore defined only where \campo{SNOWC}
+exceeds \num{0.9}, that is, where \campo{snowc} exceeds \SI{90}{\percent}, and is missing elsewhere,
+including cells with snow on a smaller fraction. The field is missing everywhere at 7 of the 34
+validity times of the verification sample, all of them in summer.
+
+\section{Vegetation, soil type and lakes}
+\label{sec:vegetazione}
+
+\paragraph{Cover.} \campo{cvl} (paramId 27) and \campo{cvh} (28) are the sums of the static-file
+fractions over the MODIS-IGBP classes of low and high vegetation, the same quantity ERA5 denotes
+(\cref{tab:tipi-veg}). High vegetation comprises the IGBP classes with tree cover above
+\SI{30}{\percent}, that is, forests (above \SI{60}{\percent}) and woody savannas (between 30 and
+\SI{60}{\percent}); savanna, between 10 and \SI{30}{\percent}, is low \parencite{modis2022}.
+
+\paragraph{Vegetation types.} \campo{tvl} (29) and \campo{tvh} (30) are, among the low classes and
+among the high ones, the class with the largest fraction in the cell, translated into WMO code table
+4.234 following the correspondence in \cref{tab:tipi-veg}. The code table distinguishes evergreen shrubs
+(code 16) from deciduous shrubs (17), whereas MODIS does not record shrub phenology. On the two
+shrubland classes the code cannot be chosen without an assumption, and \campo{tvl} is missing on
+the \num{124672} cells where shrubland dominates, \SI{16.02}{\percent} of the \num{778381} cells
+with $\campo{cvl} > 0$. \campo{cvl} still reports the cover in those cells.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Translation of the MODIS-IGBP classes into WMO 4.234 codes for \campo{tvl} and
+  \campo{tvh}.}
+  \label{tab:tipi-veg}
+  \begin{tabularx}{\textwidth}{@{}XlX@{}}
+    \toprule
+    MODIS-IGBP class & Set & 4.234 code \\
+    \midrule
+    1 evergreen needleleaf forest & high & 3 evergreen needleleaf trees \\
+    2 evergreen broadleaf forest & high & 6 evergreen broadleaf trees \\
+    3 deciduous needleleaf forest & high & 4 deciduous needleleaf trees \\
+    4 deciduous broadleaf forest & high & 5 deciduous broadleaf trees \\
+    5 mixed forest & high & 18 mixed forest \\
+    8 woody savanna & high & 19 interrupted forest \\
+    9 savanna & low & 7 tall grass \\
+    10 grassland & low & 2 short grass \\
+    11 permanent wetland (absent) & low & 13 bogs and marshes \\
+    12 cropland & low & 1 crops, mixed farming \\
+    14 cropland and natural vegetation mosaic (absent) & low & 1 crops, mixed farming \\
+    18, 19, 20 wooded, mixed and barren tundra & low & 9 tundra \\
+    6, 7 closed and open shrubland & low & none: \campo{tvl} missing \\
+    13, 15, 16, 17, 21 urban, snow and ice, barren, water, lake & none & none: fraction $1 - \campo{cvl} - \campo{cvh}$ \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{Soil type.} \campo{slt} (paramId 43) does not translate categories. Five of ECMWF's seven
+soil types are defined by thresholds on the clay and sand percentages \parencite{ifs41r2p4}, and the
+archive applies them to the clay and sand fractions of the static file (\cref{tab:slt}). The
+thresholds of the coarse, medium and fine types are those of the FAO \parencite{hwsd2012}; those of
+the medium fine and very fine types have no external source. Once the thresholds are applied, type 6
+replaces the result where the dominant soil category is organic material. All \num{1304109} permanent-land
+cells have a type: \num{1069456} medium, \num{187378} coarse, \num{45450} fine, \num{1498} organic
+and 327 very fine. Types 3 (medium fine) and 7 (tropical organic) do not occur. eccodes decodes
+\campo{slt} with WMO code table 4.213, which has 11 classes and a different meaning; the values of
+the archive must be read with the ECMWF definition.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Thresholds for the soil type \campo{slt} (clay and sand in percent).}
+  \label{tab:slt}
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Condition & ECMWF type \\
+    \midrule
+    clay $\geq 60$ & 5 very fine \\
+    $35 \leq$ clay $< 60$ & 4 fine \\
+    clay $< 35$ and sand $\leq 15$ & 3 medium fine \\
+    $18 \leq$ clay $< 35$ and sand $> 15$, or clay $< 18$ and $15 <$ sand $\leq 65$ & 2 medium \\
+    clay $< 18$ and sand $> 65$ & 1 coarse \\
+    dominant soil category of organic material & 6 organic \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Lakes.} The lake cover \campo{cl} (paramId 26) comes from the fraction of the lake class
+in the static file, and it is non-zero on \num{32000} cells. It is not redundant with the hourly
+land--sea mask \campo{lsm}: \num{19309} cells that the mask counts as land contain a lake smaller
+than the cell. The lake depth \campo{dl} (228007, \si{m}) is the \campo{LAKE_DEPTH} field of the
+static file, and it is not a model state, because the lake physics is switched off
+(\campo{SF_LAKE_PHYSICS=0}). \campo{dl} is defined on the same \num{32000} cells as \campo{cl} and
+is missing elsewhere; on \num{22991} of them it is \SI{10}{m}, the WPS default value. In the static
+file \campo{LAKE_DEPTH} takes this default value on \SI{99.56}{\percent} of the domain.
+
+\section{Albedo}
+\label{sec:albedo}
+
+The background albedo \campo{al} (paramId 174) is a table value per dominant category. The
+simulation does not use monthly satellite albedos, and the value comes from the winter and summer
+columns of the land-use table: the summer column applies from April to October, the winter column
+from November to March. Over the whole domain the field takes 8 to 11 distinct values, and at the
+switch between the two columns it changes on \num{1171937} cells, \SI{89.9}{\percent} of the
+permanent-land cells. Each change is one row of the table: for example from \num{0.20} to
+\num{0.17} on cropland on \num{497649} cells and from \num{0.23} to \num{0.25} on barren soil on
+\num{369219}. Over water it is \num{0.08}, over sea ice \num{0.65}. Within a day the value over land
+does not change; it changes only on sea-ice cells, which follow the hourly mask
+(\cref{sec:statici-orari}). \campo{al} is neither an observed albedo nor an evolving one, and a
+difference between two dates on either side of the column switch is not a physical signal.
+
+The effective albedo of the simulation is \campo{fal} (paramId 243), the ratio of reflected to
+incident solar radiation at the surface. It is defined only where the incident radiation exceeds
+\SI{50}{W/m^2}, and is missing elsewhere.
+
+\section{Orography}
+\label{sec:orografia}
+
+The orography is the surface geopotential \campo{z} (paramId 129). The slope \campo{slor} (163) is
+the magnitude of the gradient of the terrain height $h$ on the \SI{3}{km} grid, $|\nabla h|$, whereas
+paramId 163 denotes the slope of the sub-grid orography. eccodes shows the parameter name,
+\emph{Slope of sub-gridscale orography}, and nothing in the message states that the field is the
+resolved slope. The standard deviation of orography \campo{sdor} (160), computed by WPS, is the
+ERA5 quantity, evaluated over a \SI{3}{km} cell instead of a \SI{31}{km} one. The ratio of medians
+against ERA5 is \num{0.244}, equal to $(3/31)^{0.605}$, and the difference comes from the
+resolution.

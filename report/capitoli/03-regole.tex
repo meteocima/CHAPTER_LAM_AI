@@ -1,0 +1,111 @@
+\chapter{Regole di corrispondenza con ERA5}
+\label{cap:regole}
+
+Due regole decidono che cosa l'archivio pubblica e dove, e valgono per tutte le 90 variabili.
+
+\section{Regola di pubblicazione}
+\label{sec:pubblicazione}
+
+Un campo si pubblica sotto un nome ERA5 solo se la grandezza WRF è quella che il parametro ERA5
+definisce, oppure se la differenza si può dire in una riga. Un campo che non soddisfa nessuna
+delle due condizioni resta fuori dall'archivio, anche quando il modello lo calcola. I campi esclusi
+restano fuori per uno di due motivi, e non sono la stessa cosa: per alcuni campi WRF nessun
+parametro ECMWF descrive la stessa grandezza, per altri il parametro esiste ma ERA5 non lo pubblica
+(\cref{sec:non-pubblicati}).
+
+Sette campi, in sei righe della \cref{tab:approssimazioni}, sono pubblicati con una differenza
+dichiarata rispetto al loro omonimo ERA5.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Campi pubblicati con una differenza dichiarata rispetto al parametro ERA5.}
+  \label{tab:approssimazioni}
+  \begin{tabularx}{\textwidth}{@{}lXXl@{}}
+    \toprule
+    Campo & Parametro ERA5 & Campo CHAPTER & Sezione \\
+    \midrule
+    \campo{slor} & pendenza dell'orografia sottogriglia & pendenza del terreno risolto a \SI{3}{km} & \ref{sec:orografia} \\
+    \campo{10fg} & raffica parametrizzata & massimo orario del vento risolto a \SI{10}{m} & \ref{cap:raffica} \\
+    \campo{iews}, \campo{inss} & componenti dello sforzo turbolento in superficie dell'IFS & $\rho u_*^2$, con $\rho$ densità dell'aria e $u_*$ velocità d'attrito, proiettato sulla direzione del vento a \SI{10}{m} & \ref{sec:rugosita} \\
+    \campo{fsr} & rugosità efficace, con la resistenza orografica parametrizzata & rugosità locale \campo{ZNT}, valore di tabella della categoria dominante modificato dalla neve & \ref{sec:rugosita} \\
+    \campo{lsm} & maschera terra--mare permanente & maschera oraria di WRF, che conta come terra il ghiaccio marino & \ref{sec:statici-orari} \\
+    \campo{tcw} & acqua totale in colonna, cinque specie & somma di sei specie, graupel incluso & \ref{sec:colonne} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Regola di mascheratura}
+\label{sec:mascheratura}
+
+Un punto è mancante dove il parametro ERA5 non è definito. Un punto in cui il modello non fornisce
+un valore, o in cui il valore sembra sbagliato, non per questo è mancante. I punti mancanti sono
+scritti come bitmap GRIB, mai come zeri, e chi legge l'archivio distingue sempre un punto in cui il
+parametro non è definito da uno in cui vale zero. La \cref{tab:maschere} elenca i campi mascherati.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Campi con punti mancanti e dominio su cui sono definiti.}
+  \label{tab:maschere}
+  \begin{tabularx}{\textwidth}{@{}lXl@{}}
+    \toprule
+    Campo & Definito su & Sezione \\
+    \midrule
+    \campo{sst}, \campo{ci} & celle di mare & \ref{sec:mare} \\
+    \campo{dl} & celle con copertura di lago maggiore di zero (\num{32000}) & \ref{sec:vegetazione} \\
+    \campo{swvl1-4}, \campo{stl1-4}, \campo{slt} & terra permanente (\num{1304109} celle) & \ref{sec:suolo}, \ref{sec:vegetazione} \\
+    \campo{tvl} & tutte le celle, tranne le \num{124672} in cui domina un arbusteto & \ref{sec:vegetazione} \\
+    \campo{mucin} & colonne con CAPE di almeno \SI{100}{J/kg} & \ref{sec:instabilita} \\
+    \campo{tsn} & celle con \campo{SNOWC} sopra \num{0.9} & \ref{sec:neve} \\
+    \campo{fal} & punti con radiazione solare incidente in superficie sopra \SI{50}{W/m^2} & \ref{sec:albedo} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+La copertura dei laghi \campo{cl} è definita anche sul mare, dove vale zero, perché una cella di
+mare non ha copertura lacustre. Quattro campi sono mascherati per una ragione diversa: nei punti mancanti
+la grandezza WRF non ha un valore che corrisponda al parametro ERA5. \campo{tvl} manca sugli
+arbusteti, perché la tabella dei tipi ERA5 separa arbusti sempreverdi e decidui e la classificazione
+MODIS non porta la fenologia degli arbusti (\cref{sec:vegetazione}). \campo{tsn} manca dove la neve
+non copre la cella, perché lì il campo del modello è una temperatura del suolo (\cref{sec:neve}).
+\campo{fal} manca dove la radiazione solare incidente in superficie non supera \SI{50}{W/m^2};
+senza radiazione incidente il rapporto fra radiazione riflessa e incidente non è definito (\cref{sec:albedo}). \campo{mucin} manca dove CAPE è sotto \SI{100}{J/kg}, perché lì la routine non restituisce
+un'inibizione (\cref{sec:instabilita}).
+
+\subsection{Mare e acque interne}
+\label{sec:mare}
+
+Per mascherare \campo{sst} e \campo{ci} serve distinguere il mare dalle acque interne, e la classe
+di lago del file statico non basta. La classe 21 (lago) della classificazione MODIS-IGBP comprende
+il Mar Nero, il Mare d'Azov e parte del Baltico, che insieme sono l'\SI{89}{\percent} delle
+\num{55881} celle che il file statico classifica interamente come lago. Mascherare su quella classe
+cancellerebbe \campo{sst} dal Mar Nero.
+
+Il criterio usato è la dimensione della componente connessa, cioè dell'insieme di celle d'acqua
+contigue per lato. Nel dominio le componenti più grandi hanno \num{844431} celle (Atlantico,
+Mediterraneo, Baltico e Mare del Nord), \num{49841} (Mar Nero e Mare d'Azov) e \num{8583} (Mar
+Rosso). La successiva è il lago Vänern, con \num{1225} celle, il lago più grande del dominio. Sono
+mare le componenti di almeno \num{2000} celle, per un totale di \num{902855} celle di mare.
+Qualunque soglia fra \num{1226} e \num{8583} celle dà lo stesso insieme.
+
+\section{Campi statici e campi orari}
+\label{sec:statici-orari}
+
+Un campo statico viene dal file statico ed è quindi identico in ogni file orario. Sono statici
+\campo{cl}, \campo{cvh}, \campo{cvl}, \campo{dl}, \campo{slt}, \campo{tvh} e \campo{tvl}. Le
+colonne di suolo \campo{swvl1-4} e \campo{stl1-4} cambiano ogni ora, ma la loro maschera è la terra
+permanente del file statico.
+
+La maschera terra--mare \campo{lsm} è invece la maschera oraria di WRF (\campo{LANDMASK}), che
+riclassifica come terra ogni cella d'acqua coperta da ghiaccio marino. La maschera cresce quindi in
+inverno: in un file del 20 marzo 2024 le celle riclassificate sono \num{2469}, esattamente le celle
+con ghiaccio marino. Il ghiaccio marino \campo{ci} vale 0 o 1, perché la simulazione non usa
+ghiaccio frazionario (\campo{FRACTIONAL_SEAICE=0}). La maschera di terra permanente, nel senso di
+ERA5, è l'insieme dei punti con $\campo{lsm} = 1$ e $\campo{ci} = 0$, contando come zero i punti
+mancanti di \campo{ci}.
+
+Anche l'albedo di fondo \campo{al} cambia nel tempo, con il ghiaccio marino e al passaggio fra la
+stagione estiva e quella invernale della tabella di uso del suolo (\cref{sec:albedo}). Per
+\campo{lsm} e \campo{al} vale il file orario dell'istante di validità, non un file qualunque
+dell'archivio.

@@ -1,0 +1,67 @@
+% Report tecnico-scientifico sull'archivio GRIB2 della rianalisi CHAPTER.
+% Compilazione: ./compila.sh (latexmk + biber da TinyTeX in ~/.TinyTeX).
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[italian]{babel}
+\usepackage[autostyle]{csquotes}
+\usepackage{microtype}
+\usepackage[margin=2.5cm]{geometry}
+
+\usepackage{amsmath}
+\usepackage{siunitx}
+\sisetup{locale=IT, group-minimum-digits=4, per-mode=symbol, exponent-product=\cdot, range-phrase={--}, range-units=single}
+\DeclareSIUnit{\hPa}{hPa}
+
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=sc}
+
+\setlength{\marginparwidth}{2cm}
+\usepackage[textsize=footnotesize, colorinlistoftodos]{todonotes}
+
+\usepackage[backend=biber, style=numeric-comp, sorting=none, maxbibnames=10]{biblatex}
+\addbibresource{bib/riferimenti.bib}
+
+\usepackage[hidelinks]{hyperref}
+\usepackage[capitalise]{cleveref}
+
+% Nomi di campi, variabili e chiavi GRIB, scritti come nel file.
+\newcommand{\campo}[1]{\texttt{\detokenize{#1}}}
+
+\title{L'archivio GRIB2 della rianalisi CHAPTER a \SI{3}{km}\\[0.5em]
+  \large Contenuto e corrispondenza con lo schema ERA5}
+\author{Luca Monaco\\Fondazione CIMA}
+\date{Settembre 2026}
+
+\begin{document}
+
+\pagenumbering{alph}
+\maketitle
+\pagenumbering{roman}
+\tableofcontents
+\cleardoublepage
+\pagenumbering{arabic}
+
+\include{capitoli/01-simulazione}
+\include{capitoli/02-formato}
+\include{capitoli/03-regole}
+\include{capitoli/04-atmosfera}
+\include{capitoli/05-superficie-energia}
+\include{capitoli/06-raffica}
+\include{capitoli/07-suolo-statici}
+\include{capitoli/08-limiti}
+\include{capitoli/09-conclusioni}
+
+\appendix
+\include{capitoli/A-variabili}
+\include{capitoli/B-verifica}
+
+\printbibliography[heading=bibintoc]
+
+\end{document}

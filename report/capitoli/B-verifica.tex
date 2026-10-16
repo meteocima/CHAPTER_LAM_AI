@@ -1,0 +1,13 @@
+\chapter{Metodo di verifica}
+\label{app:verifica}
+
+Ogni file orario viene confrontato con l'elenco dei 246 messaggi prima di entrare nell'archivio
+(\cref{sec:file}). Le proprietà dei capitoli da \ref{cap:atmosfera} a \ref{cap:suolo} sono state
+misurate su un campione di verifica di 34 istanti di validità: 4 del 2019, 26 del 2024, che coprono
+tutti i mesi, e 4 del 2025. Di questi, 16 sono alle 00 UTC, 16 alle 12 UTC, uno alle 06 e uno alle
+18 UTC. Dove un numero è misurato su un insieme diverso, il testo lo dice.\todo{I 16 istanti delle 00 UTC sono stati misurati sulla sesta ora della run del giorno stesso; l'archivio ora le prende dalla trentesima della run del giorno prima (issue 72): da rimisurare}
+
+I confronti con ERA5 usano i campi CHAPTER aggregati sulla griglia di ERA5 con una media pesata
+sull'area. Un rapporto fra CHAPTER ed ERA5 è il rapporto delle medie, cioè la media del campo
+CHAPTER divisa per la media del campo ERA5 sulla stessa popolazione di punti, oppure, dove indicato,
+il rapporto delle mediane.

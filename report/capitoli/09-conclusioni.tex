@@ -1,0 +1,59 @@
+\chapter{Proprietà che cambiano l'uso dei dati}
+\label{cap:conclusioni}
+
+La \cref{tab:proprieta} raccoglie le proprietà dell'archivio di cui tenere conto nel confronto con
+ERA5 o con le osservazioni, ciascuna con il valore misurato e la sezione che la descrive.
+
+{\small
+\begin{longtable}{@{}p{7.2cm}p{5.4cm}l@{}}
+  \caption{Proprietà dell'archivio che cambiano il modo di usarlo.}\label{tab:proprieta}\\
+  \toprule
+  Proprietà & Valore & Sezione \\
+  \midrule
+  \endfirsthead
+  \toprule
+  Proprietà & Valore & Sezione \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+  Radiazione solare discendente in superficie più alta di ERA5; la simulazione non ha aerosol
+    & \SI{+8.5}{\percent} in cielo sereno, \SI{+13.6}{\percent} con nubi & \ref{sec:radiazione} \\
+  Copertura nuvolosa più bassa di ERA5, per la \campo{CLDFRA} e non per la sovrapposizione
+    & rapporto delle medie: \campo{tcc} \num{0.783}, \campo{hcc} \num{0.610} & \ref{sec:colonne} \\
+  Temperatura di pelle sulla terra più fredda di ERA5, per cause che l'archivio non separa
+    & \SI{-1.64}{K} in media, fino a \SI{-3.24}{K} alle 12 UTC & \ref{sec:pelle} \\
+  \campo{fsr} è la rugosità locale di WRF, quella di ERA5 è efficace
+    & sulla terra, rapporto delle mediane \numrange{0.32}{0.48}, sei istanti & \ref{sec:rugosita} \\
+  \campo{zust} sulla terra risponde al terreno risolto
+    & sulla terra, rapporto delle medie \numrange{1.62}{2.06}, sei istanti & \ref{sec:rugosita} \\
+  \campo{r} è l'umidità relativa sulla fase mista, \campo{2r} quella sull'acqua liquida
+    & fino a un fattore \num{1.8} sotto \SI{250.16}{K} & \ref{sec:livelli-pressione}, \ref{sec:vicino-superficie} \\
+  \campo{r} sopra il \SI{100}{\percent} è sovrasaturazione del modello e non è troncata
+    & fino al \SI{139.7}{\percent} a \SI{300}{\hPa} il 15 luglio 2024 alle 12 UTC & \ref{sec:livelli-pressione} \\
+  L'umidità relativa ricostruita da \campo{2t} e \campo{2d} supera la saturazione
+    & fino al \SI{100.09}{\percent} & \ref{sec:vicino-superficie} \\
+  Sotto il terreno i livelli di pressione portano il valore del livello del modello più basso (clamping); ERA5 estrapola
+    & \SI{1000}{\hPa} sotto il terreno sul \SI{47.6}{\percent} del dominio & \ref{sec:sotto-terreno} \\
+  \campo{z} è l'altezza geopotenziale del modello moltiplicata per $g_0 = \SI{9.80665}{m/s^2}$; WRF integra con $g = \SI{9.81}{m/s^2}$
+    & \SI{0.034}{\percent} dall'equilibrio idrostatico & \ref{sec:livelli-pressione} \\
+  \campo{10fg} è il vento risolto a \SI{10}{m}, non una raffica parametrizzata
+    & \num{0.625} volte il \campo{10fg} di ERA5, su 16 istanti & \ref{sec:10fg-era5} \\
+  La finestra oraria di \campo{10fg} non è sempre di un'ora
+    & azzeramento mancato in 17 dei 138 passaggi orari (\SI{12.3}{\percent}), su sei giorni & \ref{sec:10fg-finestra} \\
+  Tre deflussi portano un campo solo; manca il drenaggio a scala giornaliera
+    & \campo{ssro} diverso da zero in al più 17 dei \num{2220273} punti, in otto istanti orari del 2024 & \ref{sec:precipitazione} \\
+  \campo{tcw} somma sei specie, ECMWF ne definisce cinque
+    & residuo di graupel fino a \SI{26.46}{kg/m^2} in quattro istanti del 2024 & \ref{sec:colonne} \\
+  Un punto è mancante dove il parametro ERA5 non è definito; bitmap, mai zeri
+    & 16 campi con bitmap (\cref{tab:maschere}) & \ref{sec:mascheratura} \\
+  \campo{mucin} è mancante dove CAPE è sotto \SI{100}{J/kg}
+    & dal \SI{71.2}{\percent} (luglio) al \SI{96.2}{\percent} (gennaio) del dominio, alle 12 UTC & \ref{sec:instabilita} \\
+  \campo{generatingProcessIdentifier} non distingue gli accumulati
+    & 128 in 246 messaggi su 246 & \ref{sec:tempo} \\
+  \campo{al} è un valore di tabella a due stagioni per categoria dominante
+    & da 8 a 11 valori sul dominio & \ref{sec:albedo} \\
+  \campo{slor} è la pendenza del terreno risolto sotto il nome ECMWF della pendenza sottogriglia; \campo{sdor} è calcolata su celle di \SI{3}{km}
+    & \campo{sdor}: rapporto delle mediane \num{0.244} & \ref{sec:orografia} \\
+\end{longtable}
+}

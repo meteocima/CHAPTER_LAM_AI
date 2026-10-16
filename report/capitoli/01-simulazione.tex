@@ -1,0 +1,97 @@
+\chapter{La simulazione}
+\label{cap:simulazione}
+
+CHAPTER è una rianalisi regionale prodotta con il modello WRF, versione 4.1.1
+\parencite{wrf411}. L'archivio GRIB2 CHAPTER contiene i file wrfout orari della simulazione
+convertiti in GRIB2, con i nomi e i codici dei parametri ECMWF.
+
+\section{Dominio, griglia e periodo}
+\label{sec:dominio}
+
+La simulazione usa il dominio d02, una griglia Mercator di $\num{1641} \times \num{1353}$ celle
+con passo di \SI{3}{km}, cioè \num{2220273} punti per campo. Il parallelo standard della
+proiezione è \ang{44.671} N. Il dominio va da \ang{23.4719} a \ang{60.0006} di latitudine nord e
+da \ang{19.9722} O a \ang{42.2555} E. In verticale il modello ha 49 livelli, con il top a
+\SI{50}{\hPa}. WRF integra le equazioni su una sfera di raggio \SI{6370}{km}, e l'archivio dichiara
+la stessa sfera nella definizione di griglia (\cref{sec:geometria}).
+
+L'archivio copre a passo orario gli anni 2019 e 2024 e il periodo dal 1º gennaio al 2 luglio 2025,
+per \num{21936} istanti di validità. Il 2 luglio 2025 alle 23 UTC è l'ultimo istante prodotto dalla
+simulazione. Ogni run giornaliera parte alle 18 UTC del giorno che precede quello a cui è dedicata
+e integra \SI{30}{h}; le prime \SI{6}{h} sono di spin-up e non entrano nell'archivio. Il giorno D è
+fatto degli istanti di validità dalle 01 alle 23 UTC della run partita alle 18 UTC di D$-1$, e il suo
+istante di validità delle 00 UTC è l'ultima ora, la trentesima, della run partita alle 18 UTC di
+D$-2$ (\cref{sec:tempo,sec:cambio-run}).
+
+\section{Configurazione fisica}
+\label{sec:configurazione}
+
+La \cref{tab:configurazione} riporta le opzioni della simulazione da cui dipende il contenuto
+dell'archivio, lette dagli attributi globali dei file wrfout. Sono le stesse nei tre periodi
+controllati, il 2019, marzo 2024 e luglio 2024.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Opzioni della simulazione che determinano quali campi l'archivio può contenere.}
+  \label{tab:configurazione}
+  \begin{tabularx}{\textwidth}{@{}lllX@{}}
+    \toprule
+    Opzione & Valore & Schema & Conseguenza per l'archivio \\
+    \midrule
+    \campo{BL_PBL_PHYSICS}     & 1 & YSU      & schema non locale, senza energia cinetica turbolenta prognostica \\
+    \campo{KM_OPT}             & 4 &          & la diffusione non produce energia cinetica turbolenta \\
+    \campo{SF_OCEAN_PHYSICS}   & 0 &          & oceano non simulato: niente correnti né altezza della superficie del mare \\
+    nessun modello d'onda      &   &          & nessun campo d'onda \\
+    \campo{SST_UPDATE}         & 0 &          & temperatura del mare costante in ogni run giornaliera \\
+    \campo{CU_PHYSICS}         & 0 &          & convezione risolta; \campo{RAINC} identicamente nullo \\
+    \campo{MP_PHYSICS}         & 6 & WSM6     & acqua di nube, pioggia, ghiaccio, neve e graupel; nessuna grandine \\
+    \campo{ICLOUD}             & 1 & Xu--Randall & frazione nuvolosa continua fra 0 e 1 \\
+    \campo{SF_SURFACE_PHYSICS} & 3 & RUC      & suolo su sei nodi a \SIlist{0;5;20;40;160;300}{cm} \\
+    \campo{SF_LAKE_PHYSICS}    & 0 &          & nessun modello di lago \\
+    \campo{SF_URBAN_PHYSICS}   & 0 &          & nessuno schema urbano \\
+    \campo{aer_opt}            & 0 &          & radiazione senza aerosol \\
+    \campo{usemonalb}          & \campo{.false.} & & albedo di fondo da tabella, non da satellite \\
+    \campo{rdlai2d}            & \campo{.false.} & & indice di area fogliare da tabella per categoria \\
+    \campo{isfflx}             & 1 &          & flussi turbolenti di superficie calcolati a ogni passo temporale \\
+    \campo{output_diagnostics} & 0 &          & nessun estremo orario di temperatura a \SI{2}{m} \\
+    \campo{nwp_diagnostics}    & 1 &          & massimo orario del vento a \SI{10}{m} e altri sei massimi orari \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Lo schema radiativo è RRTMG, con la climatologia dell'ozono di CAM (\campo{o3input=2}). La
+microfisica WSM6 porta cinque specie condensate, fra cui il graupel, che ERA5 non pubblica come
+campo separato (\cref{sec:colonne}).
+
+Nello schema di superficie RUC l'albedo di fondo, l'indice di area fogliare e la rugosità sono
+valori di tabella per categoria dominante, cioè per la classe di uso del suolo con la frazione
+maggiore nella cella. Per questo \campo{al} prende da 8 a 11 valori su tutto il dominio e
+\campo{fsr}, fuori dalla neve, un valore per categoria (\cref{cap:superficie,cap:suolo}).
+
+L'energia cinetica turbolenta, le onde, le correnti e l'altezza della superficie del mare non
+esistono in questa simulazione. L'altezza dello strato limite e i flussi di calore sensibile e
+latente, invece, sono stati calcolati ma non scritti nei file wrfout (\cref{cap:limiti}).
+
+\section{Il file statico}
+\label{sec:file-statico}
+
+Le informazioni statiche su suolo, vegetazione e laghi vengono dal file statico
+\campo{geo_em.d02}, prodotto dal preprocessore di WRF (WPS) per questa simulazione. La sua
+categoria di uso del suolo (\campo{LU_INDEX}) coincide con la categoria dominante scritta ogni ora
+nei file wrfout (\campo{IVGTYP}) sul \SI{100.00}{\percent} delle celle a luglio 2019 e a gennaio
+2025, una volta esclusa la riclassificazione dei laghi come acqua, che il modello applica perché
+la fisica dei laghi è spenta. Il 15 febbraio 2025 alle 12 UTC l'accordo scende al
+\SI{99.98}{\percent}: le \num{2735} celle diverse portano tutte ghiaccio marino, che il modello
+riclassifica come terra a ogni ora (\cref{sec:statici-orari}).
+
+L'uso del suolo è espresso in 21 classi MODIS-IGBP (\campo{MMINLU=MODIFIED_IGBP_MODIS_NOAH}). Il
+file statico porta per ogni cella la frazione di ciascuna classe, mentre i file wrfout ne
+conservano solo la categoria dominante. In media la categoria dominante occupa il
+\SI{90.1}{\percent} di una cella di terra, e il \SI{17.93}{\percent} delle celle di terra ha sia
+vegetazione alta sia vegetazione bassa sopra il \SI{5}{\percent}. Dal file statico vengono anche la
+tessitura del suolo e la profondità dei laghi. Il file statico ha reso possibili quindici campi:
+le coperture e i tipi di vegetazione (\campo{cvl}, \campo{cvh}, \campo{tvl}, \campo{tvh}), il tipo
+di suolo (\campo{slt}), la copertura e la profondità dei laghi (\campo{cl}, \campo{dl}) e gli otto
+campi di umidità e temperatura del suolo sugli strati ERA5, a cui fornisce la maschera di terra
+permanente (\cref{cap:suolo}).

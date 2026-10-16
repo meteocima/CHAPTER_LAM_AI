@@ -1,0 +1,203 @@
+\chapter{Acqua, suolo, neve e campi statici}
+\label{cap:suolo}
+
+\section{Precipitazione e deflusso}
+\label{sec:precipitazione}
+
+La precipitazione e il deflusso sono campi accumulati sull'ora che termina all'istante di validità
+(\cref{sec:tempo}). La
+precipitazione totale \campo{tp} (paramId 228, \si{m}) è la precipitazione risolta \campo{RAINNC} di
+WRF, completa perché la precipitazione convettiva \campo{RAINC} è identicamente nulla
+(\campo{CU_PHYSICS=0}, \cref{tab:configurazione}). La neve \campo{sf} (144, \si{m} di acqua
+equivalente) è la somma della neve e del graupel risolti, $\campo{SNOWNC} + \campo{GRAUPELNC}$, cioè
+tutta la precipitazione solida come nella definizione ECMWF \parencite{paramdb}. La pioggia
+\campo{tirf} (235015, \si{kg/m^2}) è la precipitazione totale meno neve e graupel; la microfisica non
+ha grandine. I tre campi si chiudono: con \campo{tirf} convertito in metri,
+$\campo{tp} - \campo{sf} - \campo{tirf}$ vale al più \SI{7.8e-8}{m} nel punto peggiore, il 15
+febbraio e il 15 luglio 2024 alle 12 UTC.
+
+I tre deflussi, superficiale (\campo{sro}, paramId 8), sotto-superficiale (\campo{ssro}, 9) e totale
+(\campo{ro}, 205), portano l'informazione di un campo solo, e l'archivio li pubblica tutti e tre
+\parencite{issue51}. In otto istanti del 2024 (quattro nella \cref{tab:deflusso}), il 15 gennaio,
+febbraio, marzo e agosto alle 12 UTC e il 15 luglio alle 00, 06, 12 e 18 UTC, \campo{ssro} è
+identicamente nullo in quattro e, dove non lo è, è diverso da zero in al più 17 dei \num{2220273}
+punti di griglia. In ogni punto degli otto istanti, $|\campo{ro} - \campo{sro} - \campo{ssro}|$ non
+supera \SI{7.5e-9}{m}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Medie di dominio dei deflussi, accumulati sull'ora che termina all'istante di validità, in
+  \si{m}, e numero di punti di griglia in cui \campo{ssro} è diverso da zero.}
+  \label{tab:deflusso}
+  \begin{tabular}{@{}lSSrS@{}}
+    \toprule
+    Istante di validità & {\campo{sro}} & {\campo{ssro}} & Punti \campo{ssro} $\neq 0$ & {\campo{ro}} \\
+    \midrule
+    2024-02-15 12 UTC & 4.819e-6 & 0       & 0  & 4.819e-6 \\
+    2024-07-15 12 UTC & 5.543e-6 & 2.2e-9  & 3  & 5.545e-6 \\
+    2024-07-15 18 UTC & 1.829e-5 & 1.5e-9  & 2  & 1.829e-5 \\
+    2024-08-15 12 UTC & 2.334e-6 & 0       & 0  & 2.334e-6 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\campo{ssro} è l'incremento orario di \campo{UDROFF}, l'accumulatore del deflusso sotto-superficiale
+del modello. L'accumulatore è diverso da zero in un numero di punti fra 462 e
+\num{8363}, con massimi fra 11 e \SI{106}{mm}. Nella run partita alle 18 UTC del 14 luglio 2024 gli
+stessi \num{1647} punti portano deflusso sotto-superficiale alla sesta, dodicesima, diciottesima e
+ventiquattresima ora (00, 06, 12 e 18 UTC del 15 luglio), solo 19 di essi crescono fra la sesta e la
+ventiquattresima ora, e in una singola ora ne crescono al più 17.
+
+Rispetto a ERA5, con le accumulazioni di entrambe le rianalisi sommate sulle ore dalle 01 UTC all'istante di validità, \campo{sro} vale fra \num{1.0} e \num{4.6} volte quello di ERA5, \campo{ssro} fra
+\num{0.000} e \num{0.004} volte e \campo{ro} fra \num{0.19} e \num{0.85} volte. In ERA5 il termine
+maggiore è il deflusso sotto-superficiale, che nell'archivio è quasi ovunque nullo
+(\cref{tab:deflusso}).
+
+\section{Suolo}
+\label{sec:suolo}
+
+L'umidità volumetrica del suolo \campo{swvl1-4} (paramId 39--42, \si{m^3/m^3}) e la temperatura del
+suolo \campo{stl1-4} (139, 170, 183, 236, \si{K}) sono date sui quattro strati di ERA5, 0--7, 7--28,
+28--100 e \SIrange{100}{289}{cm}. Lo schema RUC porta invece valori puntuali su sei nodi, a
+\SIlist{0;5;20;40;160;300}{cm}, con un profilo lineare fra un nodo e il successivo. I quattro strati
+ERA5 stanno fra il primo e l'ultimo nodo, perché ERA5 comincia a \SI{0}{cm}, dove sta il primo nodo,
+e finisce a \SI{289}{cm}, prima del nodo a \SI{300}{cm}. Ogni strato è quindi la media esatta, sullo
+strato, del profilo lineare del modello, senza estrapolazione a nessuna delle due estremità. Ogni
+strato è una combinazione pesata di tre nodi consecutivi, a 0, 5 e \SI{20}{cm}, a 5, 20 e
+\SI{40}{cm}, a 20, 40 e \SI{160}{cm} e a 40, 160 e \SI{300}{cm}, con pesi che sommano a 1.
+\campo{swvl} usa l'umidità totale del suolo, liquida più ghiacciata, che è ciò che il nome ERA5
+indica.
+
+Gli otto campi sono definiti sulla terra permanente del file statico, e il ghiaccio marino non ha
+colonna di suolo, come in ERA5, la cui maschera terra--mare è permanente. Dove si forma ghiaccio
+marino WRF riclassifica la cella come terra, le assegna il tipo di suolo 16 e riempie d'acqua la
+colonna di suolo: \campo{swvl} arriva esattamente a \num{1.000}, contro una porosità di \num{0.435}
+per quel tipo di suolo. Quelle colonne sono uno stato del modello ma non un suolo, e l'archivio le
+maschera. Il ghiaccio stesso resta nel file, in \campo{ci}.
+
+\section{Neve}
+\label{sec:neve}
+
+L'archivio porta l'acqua equivalente della neve \campo{sd} (paramId 141, \si{m}), la densità
+\campo{rsn} (33, \si{kg/m^3}), la copertura \campo{snowc} (260038, \si{\percent}) e la temperatura
+dello strato di neve \campo{tsn} (238, \si{K}). \campo{tsn} è \campo{SOILT1}, la temperatura del
+primo livello della colonna di neve e suolo del modello, e dove la neve non copre la cella quel
+livello è suolo. Il campo è quindi definito solo dove \campo{SNOWC} supera \num{0.9}, cioè dove
+\campo{snowc} supera il \SI{90}{\percent}, e altrove è mancante, comprese le celle con neve su una
+frazione minore. Il campo è interamente mancante in 7 dei 34 istanti del campione di verifica, tutti
+estivi.
+
+\section{Vegetazione, tipo di suolo e laghi}
+\label{sec:vegetazione}
+
+\paragraph{Coperture.} \campo{cvl} (paramId 27) e \campo{cvh} (28) sono le somme delle frazioni del
+file statico sulle classi MODIS-IGBP di vegetazione bassa e alta, la stessa grandezza intesa da ERA5
+(\cref{tab:tipi-veg}). Sono vegetazione alta le classi IGBP con copertura arborea sopra il
+\SI{30}{\percent}, cioè le foreste (sopra il \SI{60}{\percent}) e le savane alberate (fra il 30 e il
+\SI{60}{\percent}); la savana, fra il 10 e il \SI{30}{\percent}, è bassa \parencite{modis2022}.
+
+\paragraph{Tipi di vegetazione.} \campo{tvl} (29) e \campo{tvh} (30) sono, fra le classi basse e fra
+quelle alte, la classe con la frazione maggiore nella cella, tradotta nella tabella di codici WMO
+4.234 con la corrispondenza della \cref{tab:tipi-veg}. La tabella distingue arbusti sempreverdi
+(codice 16) e decidui (17), mentre MODIS non registra la fenologia degli arbusti. Sulle due classi di
+arbusteto il codice non si può scegliere senza un'ipotesi, e \campo{tvl} è mancante sulle
+\num{124672} celle in cui domina un arbusteto, il \SI{16.02}{\percent} delle \num{778381} celle con
+$\campo{cvl} > 0$. \campo{cvl} riporta comunque la copertura in quelle celle.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Traduzione delle classi MODIS-IGBP nei codici WMO 4.234 per \campo{tvl} e \campo{tvh}.}
+  \label{tab:tipi-veg}
+  \begin{tabularx}{\textwidth}{@{}XlX@{}}
+    \toprule
+    Classe MODIS-IGBP & Insieme & Codice 4.234 \\
+    \midrule
+    1 foresta di aghifoglie sempreverdi & alta & 3 aghifoglie sempreverdi \\
+    2 foresta di latifoglie sempreverdi & alta & 6 latifoglie sempreverdi \\
+    3 foresta di aghifoglie decidue & alta & 4 aghifoglie decidue \\
+    4 foresta di latifoglie decidue & alta & 5 latifoglie decidue \\
+    5 foresta mista & alta & 18 foresta mista \\
+    8 savana alberata & alta & 19 foresta interrotta \\
+    9 savana & bassa & 7 erba alta \\
+    10 prateria & bassa & 2 erba bassa \\
+    11 zona umida permanente (assente) & bassa & 13 paludi e torbiere \\
+    12 coltivi & bassa & 1 coltivi, agricoltura mista \\
+    14 mosaico di coltivi e vegetazione naturale (assente) & bassa & 1 coltivi, agricoltura mista \\
+    18, 19, 20 tundra alberata, mista e nuda & bassa & 9 tundra \\
+    6, 7 arbusteto chiuso e aperto & bassa & nessuno: \campo{tvl} mancante \\
+    13, 15, 16, 17, 21 urbano, neve e ghiaccio, suolo nudo, acqua, lago & nessuno & nessuno: frazione $1 - \campo{cvl} - \campo{cvh}$ \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{Tipo di suolo.} \campo{slt} (paramId 43) non traduce categorie. Cinque dei sette tipi di
+suolo di ECMWF sono definiti da soglie sulle percentuali di argilla e sabbia \parencite{ifs41r2p4},
+e l'archivio le applica alle frazioni di argilla e sabbia del file statico (\cref{tab:slt}). Le
+soglie dei tipi grossolano, medio e fine sono quelle della FAO \parencite{hwsd2012}; quelle dei tipi
+medio fine e molto fine non hanno una fonte esterna. Dopo le soglie, il tipo 6 sostituisce il
+risultato dove la categoria di suolo dominante è il materiale organico. Tutte le \num{1304109} celle
+di terra permanente hanno un tipo: \num{1069456} medio, \num{187378} grossolano, \num{45450} fine,
+\num{1498} organico e 327 molto fine. I tipi 3 (medio fine) e 7 (organico tropicale) non compaiono.
+eccodes decodifica \campo{slt} con la tabella WMO 4.213, che ha 11 classi e un significato diverso; i
+valori dell'archivio vanno letti con la definizione ECMWF.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Soglie per il tipo di suolo \campo{slt} (argilla e sabbia in percentuale).}
+  \label{tab:slt}
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Condizione & Tipo ECMWF \\
+    \midrule
+    argilla $\geq 60$ & 5 molto fine \\
+    $35 \leq$ argilla $< 60$ & 4 fine \\
+    argilla $< 35$ e sabbia $\leq 15$ & 3 medio fine \\
+    $18 \leq$ argilla $< 35$ e sabbia $> 15$, oppure argilla $< 18$ e $15 <$ sabbia $\leq 65$ & 2 medio \\
+    argilla $< 18$ e sabbia $> 65$ & 1 grossolano \\
+    categoria di suolo dominante di materiale organico & 6 organico \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Laghi.} La copertura dei laghi \campo{cl} (paramId 26) viene dalla frazione della classe
+di lago del file statico, ed è diversa da zero su \num{32000} celle. Non è ridondante rispetto alla
+maschera terra--mare oraria \campo{lsm}: \num{19309} celle che la maschera conta come terra
+contengono un lago più piccolo della cella. La profondità dei laghi \campo{dl} (228007, \si{m}) è il
+campo \campo{LAKE_DEPTH} del file statico, e non è uno stato del modello, perché la fisica dei laghi è
+spenta (\campo{SF_LAKE_PHYSICS=0}). \campo{dl} è definito sulle stesse \num{32000} celle di
+\campo{cl} ed è mancante altrove; in \num{22991} di esse vale \SI{10}{m}, il valore predefinito di
+WPS. Nel file statico \campo{LAKE_DEPTH} vale questo valore predefinito sul \SI{99.56}{\percent} del
+dominio.
+
+\section{Albedo}
+\label{sec:albedo}
+
+L'albedo di fondo \campo{al} (paramId 174) è un valore di tabella per categoria dominante. La
+simulazione non usa albedo mensili da satellite, e il valore viene dalle colonne invernale ed estiva
+della tabella di uso del suolo: la colonna estiva vale da aprile a ottobre, quella invernale da
+novembre a marzo. Su tutto il dominio il campo prende da 8 a 11 valori, e al passaggio fra le due
+colonne cambia in \num{1171937} celle, l'\SI{89.9}{\percent} delle celle di terra permanente. Ogni passaggio è una riga
+della tabella: per esempio da \num{0.20} a \num{0.17} sui coltivi in \num{497649} celle e da
+\num{0.23} a \num{0.25} sul suolo nudo in \num{369219}. Sull'acqua vale \num{0.08}, sul ghiaccio
+marino \num{0.65}. Nell'arco di un giorno il valore sulla terra non cambia; cambia solo nelle celle di
+ghiaccio marino, che seguono la maschera oraria (\cref{sec:statici-orari}). \campo{al} non è
+un'albedo osservata né un'albedo che evolve, e una differenza fra due date a cavallo del cambio di
+colonna non è un segnale fisico.
+
+L'albedo effettiva della simulazione è \campo{fal} (paramId 243), il rapporto fra radiazione solare
+riflessa e incidente in superficie. È definita solo dove la radiazione incidente supera
+\SI{50}{W/m^2}, e altrove è mancante.
+
+\section{Orografia}
+\label{sec:orografia}
+
+L'orografia è il geopotenziale di superficie \campo{z} (paramId 129). La pendenza \campo{slor} (163)
+è il modulo del gradiente della quota del terreno risolto a \SI{3}{km}, $|\nabla h|$, mentre il
+paramId 163 indica la pendenza dell'orografia sottogriglia. eccodes mostra il nome del parametro,
+\emph{Slope of sub-gridscale orography}, e nulla nel messaggio dice che si tratta della pendenza
+risolta. La deviazione standard dell'orografia \campo{sdor} (160), calcolata da WPS, è la grandezza
+di ERA5, valutata su una cella di \SI{3}{km} anziché di \SI{31}{km}. Il rapporto delle mediane
+rispetto a ERA5 è \num{0.244}, pari a $(3/31)^{0{,}605}$, e la differenza viene dalla risoluzione.

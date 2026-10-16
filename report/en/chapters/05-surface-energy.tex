@@ -1,0 +1,199 @@
+\chapter{Radiation, skin temperature and surface exchanges}
+\label{cap:superficie}
+
+Over the verification sample the archive carries more downward solar radiation at the surface than
+ERA5 (\num{1.136} times), less total cloud cover (\num{0.783} times), and a skin temperature over
+land \SI{1.64}{K} colder. Radiation, clouds and the surface energy budget must therefore be read
+together.
+
+\section{Radiation}
+\label{sec:radiazione}
+
+The 13 radiative fluxes of \cref{tab:radiazione} are fields accumulated over the hour ending at the validity time, in
+\si{J/m^2} (\cref{sec:tempo}).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Radiative fluxes, accumulated over the hour ending at the validity time.}
+  \label{tab:radiazione}
+  \begin{tabular}{@{}lrl@{}}
+    \toprule
+    Field & paramId & Description \\
+    \midrule
+    \campo{ssrd}  & 169    & surface downward solar radiation \\
+    \campo{ssrdc} & 228129 & surface downward solar radiation, clear sky \\
+    \campo{ssr}   & 176    & surface net solar radiation \\
+    \campo{ssrc}  & 210    & surface net solar radiation, clear sky \\
+    \campo{strd}  & 175    & surface downward thermal radiation \\
+    \campo{strdc} & 228130 & surface downward thermal radiation, clear sky \\
+    \campo{str}   & 177    & surface net thermal radiation \\
+    \campo{strc}  & 211    & surface net thermal radiation, clear sky \\
+    \campo{tisr}  & 212    & incident solar radiation at the top of the atmosphere \\
+    \campo{tsr}   & 178    & net solar radiation at the top of the atmosphere \\
+    \campo{tsrc}  & 208    & net solar radiation at the top of the atmosphere, clear sky \\
+    \campo{ttr}   & 179    & net thermal radiation at the top of the atmosphere \\
+    \campo{ttrc}  & 209    & net thermal radiation at the top of the atmosphere, clear sky \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Solar radiation at the surface is higher than in ERA5: the downward flux by \SI{8.5}{\percent} under
+clear sky and by \SI{13.6}{\percent} under all-sky conditions (\cref{tab:rad-era5}) \parencite{issue45}. The
+simulation has no aerosol (\campo{aer_opt=0}), whereas ERA5 uses the aerosol climatology of
+\textcite{tegen1997}. The clear-sky flux isolates the cloud-free atmosphere, and the thermal fields,
+on which aerosol does not act, agree with ERA5 within \SI{1.1}{\percent}; the comparison attributes
+the clear-sky excess to the absence of aerosol. With clouds the excess grows, because the total
+cloud cover is \num{0.783} times that of ERA5 (\cref{sec:colonne}) and lets more radiation through.
+For solar energy applications, or for training against pyranometer observations, the archive
+carries a systematic excess of this size, which is a property of the simulation and which the
+conversion cannot remove.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Ratio of means between CHAPTER and ERA5 over the verification sample, with the CHAPTER
+  fields aggregated onto the ERA5 grid.}
+  \label{tab:rad-era5}
+  \begin{tabular}{@{}lS@{}}
+    \toprule
+    Field & {CHAPTER / ERA5} \\
+    \midrule
+    \campo{ssrdc} & 1.085 \\
+    \campo{ssrd}  & 1.136 \\
+    \campo{ssrc}  & 1.116 \\
+    \campo{ssr}   & 1.178 \\
+    \campo{tsrc}  & 1.031 \\
+    \campo{strd}  & 0.989 \\
+    \campo{strdc} & 0.996 \\
+    \campo{ttr}   & 1.009 \\
+    \campo{ttrc}  & 0.990 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Skin temperature}
+\label{sec:pelle}
+
+The simulation did not write the model skin temperature (\campo{TSK}), and the archive
+reconstructs it as \campo{skt} from the outgoing thermal radiation at the surface. The upward flux
+$F^{\uparrow}$ (\campo{LWUPB} in WRF) is
+\begin{equation}
+  F^{\uparrow} = \varepsilon \sigma T_s^4 + (1 - \varepsilon) F^{\downarrow},
+  \label{eq:lwup}
+\end{equation}
+where $\varepsilon$ is the surface emissivity, $\sigma$ the Stefan--Boltzmann constant, $T_s$ the
+skin temperature and $F^{\downarrow}$ the downward thermal flux at the surface (\campo{GLW}). The
+emissivity is derived from the simulation itself. RRTMG also computes the clear-sky fluxes, with
+the same emissivity and the same skin temperature and a different downward flux. Subtracting the
+two forms of \cref{eq:lwup} eliminates the temperature:
+\begin{equation}
+  \varepsilon = 1 - \frac{F^{\uparrow} - F^{\uparrow}_\text{cs}}{F^{\downarrow} - F^{\downarrow}_\text{cs}},
+  \label{eq:emissivita}
+\end{equation}
+where the subscript cs denotes clear sky. The expression is an identity, with no reference
+temperature and no estimated parameters. Measured in this way, the category emissivity is the same
+in every cell with the same dominant category, with an interquartile range of zero to the fourth
+decimal place, and equals \num{0.98000} over water. The values per category coincide with the
+\campo{LEMI} column of the \campo{MODI-RUC} section of \campo{VEGPARM.TBL} \parencite{wrf411}, from
+\num{0.850} on barren soil to \num{0.980} over water.
+
+With snow the emissivity switches to \num{0.98} for all categories. The archive applies \num{0.98}
+where the snow cover \campo{SNOWC} exceeds the snow-cover threshold, \num{0.015}
+(\SI{1.5}{\percent}), and below the threshold blends the two values. The snow-cover threshold is
+the only parameter of the reconstruction not read from the simulation: it is the value that minimizes
+the skin-temperature error in a sweep over the 34 validity times of the verification sample.
+
+The accuracy depends on the season (\cref{tab:skt}). Over open water, where the model skin
+temperature is the sea surface temperature, the reconstruction recovers it with a root-mean-square error of
+\SI{0.0005}{K} on about \num{910000} points, at every validity time of the verification sample.
+Over land the reconstructed emissivity coincides with the model one within $10^{-4}$ on
+\SI{99.98}{\percent} of the points in July and on \SI{93.05}{\percent} in January. The whole of the
+difference between the seasons comes from the snow rule. Over snow-free land the reconstructed skin
+temperature differs from the temperature of the soil node at \SI{0}{cm} (\campo{TSLB}) by a
+root-mean-square difference of \SI{0.026}{K}, on 4 September 2024 at 16 UTC.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Accuracy of the reconstructed skin temperature against the model state.}
+  \label{tab:skt}
+  \begin{tabularx}{\textwidth}{@{}Xl@{}}
+    \toprule
+    Quantity & Value \\
+    \midrule
+    open water, root-mean-square error (maximum absolute error) & \SI{0.0005}{K} (\SI{0.002}{K}) \\
+    land, points with emissivity within $10^{-4}$ & \SI{99.98}{\percent} in July, \SI{93.05}{\percent} in January \\
+    land, root-mean-square error in July & \SI{0.0012}{K} \\
+    land, root-mean-square error in January and February & \SI{0.084}{K} to \SI{0.119}{K} \\
+    land, January and February, 99th-percentile absolute error (maximum) & \SI{0.81}{K} (\SI{2.79}{K}) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Against ERA5 the skin temperature over land is \SI{1.64}{K} colder on average over the 34 validity
+times of the verification sample. The difference, CHAPTER minus ERA5, ranges from \SI{-0.5}{K} to
+\SI{-1.2}{K} among the 00 UTC validity times\todo{00 UTC validity times to be re-measured on the files of the previous day's run (issue 72)} and from \SI{-0.8}{K} to \SI{-3.24}{K} among the
+12 UTC ones, with the coldest value on 15 September 2024. Over the sea the difference is
+\SI{+0.01}{K}, and the correlation with ERA5 is between \num{0.95} and \num{0.98} over both land and
+sea \parencite{issue57}. Over the sea, where the two reanalyses use almost the same sea surface temperature,
+the difference of \SI{0.01}{K} rules out the reconstruction, the emissivity and the encoding as
+causes. The error of the reconstruction over land, at most \SI{0.119}{K} in root-mean-square error,
+is more than ten times smaller than the mean difference from ERA5.
+
+The difference over land has the opposite sign to the one that radiation and clouds suggest.
+More solar radiation at the ground and fewer clouds bring energy to the surface, yet the surface is
+colder, above all at 12 UTC, when the excess of solar radiation is largest. The partitioning of
+energy at the surface therefore remains unexplained. Explaining it requires the surface energy
+budget, whose three closing terms, the sensible heat flux, the latent heat flux and the ground heat
+flux, are not in the archive (\cref{cap:limiti}). Without these fields four possible causes cannot
+be separated: the surface scheme may send more energy into latent heat, the soil-moisture climate
+may differ from that of ERA5, the orography resolved at \SI{3}{km} raises the mean elevation of a
+cell aggregated onto the ERA5 grid, or the difference is a model error. Users who compare
+\campo{skt} with satellite surface temperatures, or correct its bias, must use the measured
+difference and not an estimate derived from radiation and clouds.
+
+\section{Roughness length, friction velocity and stress}
+\label{sec:rugosita}
+
+The roughness length \campo{fsr} is WRF's local roughness length \campo{ZNT}: a table value per
+dominant category, replaced under snow. It is \SI{0.70}{m} for forests, \SI{0.15}{m} for savannas
+and grasslands, \SI{0.065}{m} for barren soil, \SI{1.00}{m} on the \num{19867} urban points, and
+drops to \SI{0.011}{m} where snow covers the surface. The ERA5 roughness length is instead an
+effective roughness length, which contains the orographic drag that the IFS parameterizes at
+\SI{31}{km}; at \SI{3}{km} the orography is resolved. Over the sea both roughness lengths follow
+the Charnock formula. Over land they differ by a factor of two to three (\cref{tab:rugosita}), and a
+drag coefficient computed from the archive's \campo{fsr} differs from one computed from the ERA5
+roughness length through the definition of the roughness length alone \parencite{issue56}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Roughness length and friction velocity: range of the means per validity time over six
+  validity times spread across the seasons, and ratios to ERA5.}
+  \label{tab:rugosita}
+  \begin{tabularx}{\textwidth}{@{}lXXXX@{}}
+    \toprule
+    Field & CHAPTER & ERA5 & Ratio of means & Ratio of medians \\
+    \midrule
+    \campo{fsr}, land  & \SIrange{0.188}{0.217}{m}   & \SIrange{0.375}{0.394}{m}   & \numrange{0.48}{0.55} & \numrange{0.32}{0.48} \\
+    \campo{fsr}, sea   & \SIrange{0.0089}{0.0091}{m} & \SIrange{0.0103}{0.0105}{m} & \numrange{0.85}{0.88} & \numrange{1.5}{1.9} \\
+    \campo{zust}, land & \SIrange{0.44}{0.52}{m/s}   & \SIrange{0.23}{0.28}{m/s}   & \numrange{1.62}{2.06} & \\
+    \campo{zust}, sea  & \SIrange{0.21}{0.34}{m/s}   & \SIrange{0.19}{0.31}{m/s}   & \numrange{1.08}{1.12} & \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The friction velocity \campo{zust} is the model's own. The ratio of means to ERA5 is between
+\num{1.62} and \num{2.06} over land and between \num{1.08} and \num{1.12} over the sea, where the
+correlation is between \num{0.85} and \num{0.90}. A roughness length between \num{0.32} and
+\num{0.55} times that of ERA5, together with a friction velocity between \num{1.62} and \num{2.06}
+times that of ERA5, rules out a simple scale error on the same roughness length. At \SI{3}{km} the
+terrain-forced wind is resolved, and the model friction velocity follows it.
+
+The surface stress components \campo{iews} and \campo{inss}, in \si{N/m^2}, are the magnitude
+$\rho u_*^2$, with $\rho$ the air density and $u_*$ the model friction velocity, projected onto the
+direction of the \SI{10}{m} wind. Alignment with the \SI{10}{m} wind is the only assumption. With
+$\tau$ the vector of components \campo{iews} and \campo{inss}, the identities $|\tau| = \rho u_*^2$
+and $u_* = \sqrt{|\tau|/\rho}$ hold within \SI{1.8e-6}{N/m^2} and within \SI{2.7e-4}{m/s} at every
+point of six validity times.

@@ -1,0 +1,59 @@
+\chapter{Properties that change the use of the data}
+\label{cap:conclusioni}
+
+\Cref{tab:proprieta} collects the properties of the archive to be taken into account in a comparison
+with ERA5 or with observations, each with its measured value and the section that describes it.
+
+{\small
+\begin{longtable}{@{}p{7.2cm}p{5.4cm}l@{}}
+  \caption{Properties of the archive that change the way it is used.}\label{tab:proprieta}\\
+  \toprule
+  Property & Value & Section \\
+  \midrule
+  \endfirsthead
+  \toprule
+  Property & Value & Section \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+  Downward solar radiation at the surface higher than in ERA5; the simulation has no aerosol
+    & \SI{+8.5}{\percent} in clear sky, \SI{+13.6}{\percent} with clouds & \ref{sec:radiazione} \\
+  Cloud cover lower than in ERA5, because of \campo{CLDFRA} and not of the overlap
+    & ratio of means: \campo{tcc} \num{0.783}, \campo{hcc} \num{0.610} & \ref{sec:colonne} \\
+  Skin temperature over land colder than in ERA5, for causes the archive does not separate
+    & \SI{-1.64}{K} on average, down to \SI{-3.24}{K} at 12 UTC & \ref{sec:pelle} \\
+  \campo{fsr} is WRF's local roughness length, whereas ERA5's is an effective roughness length
+    & over land, ratio of medians \numrange{0.32}{0.48}, six validity times & \ref{sec:rugosita} \\
+  \campo{zust} over land responds to the resolved terrain
+    & over land, ratio of means \numrange{1.62}{2.06}, six validity times & \ref{sec:rugosita} \\
+  \campo{r} is the relative humidity over the mixed phase, \campo{2r} the one over liquid water
+    & up to a factor of \num{1.8} below \SI{250.16}{K} & \ref{sec:livelli-pressione}, \ref{sec:vicino-superficie} \\
+  \campo{r} above \SI{100}{\percent} is model supersaturation and is not truncated
+    & up to \SI{139.7}{\percent} at \SI{300}{\hPa} on 15 July 2024 at 12 UTC & \ref{sec:livelli-pressione} \\
+  The relative humidity reconstructed from \campo{2t} and \campo{2d} exceeds saturation
+    & up to \SI{100.09}{\percent} & \ref{sec:vicino-superficie} \\
+  Below ground the pressure levels carry the value of the lowest model level (clamping); ERA5 extrapolates
+    & \SI{1000}{\hPa} below ground over \SI{47.6}{\percent} of the domain & \ref{sec:sotto-terreno} \\
+  \campo{z} is the model geopotential height multiplied by $g_0 = \SI{9.80665}{m/s^2}$; WRF integrates with $g = \SI{9.81}{m/s^2}$
+    & \SI{0.034}{\percent} from hydrostatic balance & \ref{sec:livelli-pressione} \\
+  \campo{10fg} is the resolved wind at \SI{10}{m}, not a parameterized gust
+    & \num{0.625} times the ERA5 \campo{10fg}, over 16 validity times & \ref{sec:10fg-era5} \\
+  The hourly window of \campo{10fg} is not always one hour
+    & reset missed at 17 of the 138 hourly transitions (\SI{12.3}{\percent}), over six days & \ref{sec:10fg-finestra} \\
+  The three runoff fields carry the information of a single field; drainage at the daily scale is missing
+    & \campo{ssro} non-zero at no more than 17 of the \num{2220273} points, at eight hourly validity times of 2024 & \ref{sec:precipitazione} \\
+  \campo{tcw} sums six species, ECMWF defines five
+    & graupel residual up to \SI{26.46}{kg/m^2} at four validity times in 2024 & \ref{sec:colonne} \\
+  A point is missing where the ERA5 parameter is not defined; bitmap, never zeros
+    & 16 fields with a bitmap (\cref{tab:maschere}) & \ref{sec:mascheratura} \\
+  \campo{mucin} is missing where CAPE is below \SI{100}{J/kg}
+    & from \SI{71.2}{\percent} (July) to \SI{96.2}{\percent} (January) of the domain, at 12 UTC & \ref{sec:instabilita} \\
+  \campo{generatingProcessIdentifier} does not distinguish the accumulated fields
+    & 128 in 246 of 246 messages & \ref{sec:tempo} \\
+  \campo{al} is a two-season table value per dominant category
+    & 8 to 11 values over the domain & \ref{sec:albedo} \\
+  \campo{slor} is the slope of the resolved terrain under the ECMWF name of the sub-grid slope; \campo{sdor} is computed on \SI{3}{km} cells
+    & \campo{sdor}: ratio of medians \num{0.244} & \ref{sec:orografia} \\
+\end{longtable}
+}

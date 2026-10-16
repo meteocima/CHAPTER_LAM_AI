@@ -1,0 +1,132 @@
+\chapter{Il formato dell'archivio}
+\label{cap:formato}
+
+\section{File e messaggi}
+\label{sec:file}
+
+L'archivio è fatto di un file GRIB2 per ogni istante di validità. Ogni file orario contiene 90
+variabili in 246 messaggi GRIB, sempre gli stessi: l'elenco viene da un unico registro del
+convertitore, e ogni file prodotto viene confrontato con quell'elenco, così un campo che non si è
+potuto calcolare non passa inosservato. I nomi dei file seguono lo schema
+\campo{ailam-an-cima-3km-{year}-{year}-1h-v1-{YYYYMMDD}{HH}.grib}, in cui l'anno compare due volte
+con lo stesso valore e la parte finale è l'istante di validità.
+
+I messaggi usano il template di griglia 3.10 (Mercator), il centro di origine \campo{ecmf} e la
+compressione \campo{grid_ccsds} a 24 bit per valore. Ogni parametro porta il paramId e lo
+shortName ECMWF \parencite{paramdb}. Gli shortName distinti sono 89 per 90 variabili, perché
+\campo{z} compare due volte, come geopotenziale sui livelli di pressione e come geopotenziale di
+superficie, cioè l'orografia. I campi definiti solo su una parte del dominio portano una bitmap
+GRIB, e i punti fuori dal dominio di definizione sono punti mancanti, non zeri
+(\cref{sec:mascheratura}).
+
+Un file orario pesa in media \SI{737}{MB} sui 184 file di settembre 2024, e \SI{661}{MB} sugli 8
+file delle 00 UTC fra questi; sui 476 file di febbraio e marzo 2024 la media è \SI{765}{MB}. Ne
+risultano fra \SI{17.7}{GB} e \SI{18.4}{GB} al giorno e fra \SI{6.5}{TB} e \SI{6.7}{TB} all'anno.
+
+\section{Geometria}
+\label{sec:geometria}
+
+La griglia dichiara la forma della Terra con \campo{shapeOfTheEarth=1} e raggio
+\SI{6370000}{m}, la sfera del modello (\cref{sec:dominio}). Con questa dichiarazione le coordinate
+che eccodes ricostruisce dalla definizione di griglia coincidono con quelle del modello entro
+\SI{2.009}{m} su tutto il dominio. Senza la dichiarazione, la griglia ricostruita da eccodes si
+sposta fino a circa \SI{1.1}{km} al bordo nord.
+
+\section{Livelli verticali}
+\label{sec:livelli}
+
+Le 13 variabili tridimensionali stanno sugli stessi 13 livelli di pressione,
+\SIlist{1000;925;850;700;600;500;400;300;250;200;150;100;50}{\hPa}. Sono i livelli richiesti dal
+progetto LAM AI, un sottoinsieme dei 37 livelli di pressione di ERA5 \parencite{era5doc}. Degli
+altri, gli 8 sopra \SI{50}{\hPa} stanno sopra il top del modello e non si possono produrre.
+
+I 246 messaggi si ripartiscono fra i tipi di livello della \cref{tab:tipi-livello}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Tipi di livello dei 246 messaggi di un file orario.}
+  \label{tab:tipi-livello}
+  \begin{tabularx}{\textwidth}{@{}lrX@{}}
+    \toprule
+    Tipo di livello & Messaggi & Contenuto \\
+    \midrule
+    \campo{isobaricInhPa}      & 169 & 13 variabili su 13 livelli di pressione \\
+    \campo{heightAboveGround}  & 11  & vento a 10, 100 e \SI{200}{m}; temperatura, temperatura di rugiada e umidità relativa a \SI{2}{m}; \campo{10fg}; \campo{vwsh} \\
+    \campo{surface}            & 47  & campi statici, suolo, neve, precipitazione, deflusso e radiazione in superficie \\
+    \campo{entireAtmosphere}   & 10  & integrali di colonna e coperture nuvolose \\
+    \campo{nominalTop}         & 5   & radiazione al top dell'atmosfera \\
+    \campo{mostUnstableParcel} & 2   & \campo{mucape}, \campo{mucin} \\
+    \campo{meanSea}            & 1   & \campo{msl} \\
+    \campo{entireLake}         & 1   & \campo{dl} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Convenzione temporale}
+\label{sec:tempo}
+
+I campi istantanei usano il template di prodotto 4.0, e il loro tempo di riferimento
+(\campo{dataDate}, \campo{dataTime}) coincide con l'istante di validità. I 19 campi accumulati
+sono la precipitazione totale (\campo{tp}), la pioggia (\campo{tirf}), la neve
+(\campo{sf}), i tre deflussi (\campo{sro}, \campo{ssro}, \campo{ro}) e i 13 flussi radiativi in
+superficie e al top dell'atmosfera. Usano il template 4.8, perché le definizioni ECMWF di questi
+parametri richiedono la chiave \campo{typeOfStatisticalProcessing}, che nel template 4.0 non esiste
+\parencite{eccodes}. Come in ERA5 \parencite{era5doc}, ogni campo accumulato copre l'ora
+che termina all'istante di validità $H$; nell'archivio il tempo di riferimento è $H-1$ e
+l'intervallo di accumulazione (\campo{stepRange}) è 0--1. Il valore è la differenza fra due ore successive della stessa run, per
+esempio $\campo{tp}(H) = [\campo{RAINNC}(H) - \campo{RAINNC}(H-1)]/1000$, con \campo{RAINNC} in
+\si{mm} e \campo{tp} in \si{m} \parencite{issue70}. Il ventesimo campo con template 4.8 è
+\campo{10fg}, il massimo del vento a \SI{10}{m}, con tempo di riferimento $H-1$, intervallo
+dichiarato 0--1 e \campo{stepType=max} (\cref{cap:raffica}).
+
+Il file orario delle 00 UTC del giorno D viene per intero, campi accumulati compresi, dalla
+trentesima ora della run partita alle 18 UTC di D$-2$; i campi accumulati sono la differenza fra la
+trentesima e la ventinovesima ora \parencite{issue71,issue72}. I campi accumulati del file orario
+delle 01 UTC di D sono la differenza fra la settima e la sesta ora della run partita alle 18 UTC di
+D$-1$. I 24 istanti di validità dalle 01 UTC di D alle 00 UTC di D$+1$ vengono tutti da questa run, e
+la somma dei loro campi accumulati è il totale della run dalla sesta alla trentesima ora. Quando il
+file wrfout della trentesima ora di una run manca alla sorgente, ogni messaggio del file orario
+delle 00 UTC successivo è fatto di punti mancanti; al 14 ottobre 2026 non succede in nessun file
+orario dell'archivio.
+
+Poiché i campi istantanei hanno tempo di riferimento $H$ e i campi con template 4.8 hanno $H-1$, un
+file orario contiene due tempi di riferimento, e l'indice dei file orari va costruito sull'istante
+di validità (\campo{validityDate}, \campo{validityTime}), mai sul tempo di riferimento.
+Per distinguere un campo accumulato da uno istantaneo servono \campo{stepType} (o
+\campo{typeOfStatisticalProcessing}) e \campo{stepRange}. La chiave
+\campo{generatingProcessIdentifier} vale 128, il valore predefinito di eccodes per GRIB2, in tutti
+i 246 messaggi, e non separa i campi accumulati da quelli istantanei \parencite{issue53}.
+
+\section{Il cambio di run}
+\label{sec:cambio-run}
+
+Il \emph{cambio di run} è il passaggio, una volta al giorno, fra l'istante di validità delle 00 UTC
+di D, trentesima ora della run partita alle 18 UTC di D$-2$, e quello delle 01 UTC di D, settima ora
+della run partita alle 18 UTC di D$-1$. Il salto fra i due istanti di validità è la differenza fra
+le due run alle 00 UTC di D, trentesima ora della prima e sesta della seconda, più la variazione
+dell'ora 00--01 UTC nella seconda. La \cref{tab:cambio-run} lo
+confronta con la variazione di un'ora dentro la stessa run, sul dominio intero, su un solo cambio di
+run, dalle 23 UTC del 18 gennaio alle 01 UTC del 19 gennaio 2024 \parencite{issue72}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Scarto quadratico medio fra due istanti di validità consecutivi, sul dominio intero, 18 e
+  19 gennaio 2024.}
+  \label{tab:cambio-run}
+  \begin{tabular}{@{}lSSSSS@{}}
+    \toprule
+    Istanti & {\campo{2t} (\si{K})} & {\campo{sp} (\si{\hPa})} & {modulo del vento a \SI{10}{m} (\si{m/s})} & {\campo{t} a \SI{850}{\hPa} (\si{K})} & {\campo{tcwv} (\si{kg/m^2})} \\
+    \midrule
+    23--00 UTC, stessa run & 0.66 & 0.50 & 1.13 & 0.48 & 0.89 \\
+    00--01 UTC, cambio di run & 1.79 & 1.62 & 1.62 & 0.94 & 1.54 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Il 19 gennaio 2024 lo scarto quadratico medio di \campo{2t} al cambio di run è \num{2.7} volte
+quello di un'ora dentro la stessa run, e la differenza assoluta massima fra i due istanti di
+validità è \SI{11.0}{K}, contro \SI{9.1}{K} fra le 23 e le 00 UTC. Una
+tendenza o una derivata temporale calcolata attraverso l'intervallo fra le 00 e le 01 UTC contiene
+questo salto.

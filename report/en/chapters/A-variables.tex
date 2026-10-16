@@ -1,0 +1,116 @@
+\chapter{The 90 variables}
+\label{app:variabili}
+
+\Cref{tab:inventario} lists the 90 variables of an hourly file, read from the messages of one hourly
+file; every file of the archive carries the same 246 messages (\cref{sec:file}). shortName, paramId
+and units are those returned by eccodes, and the name is that of the ECMWF parameter. The sampling
+is instantaneous, accumulated over the hour ending at the validity time (\cref{sec:tempo}), hourly maximum (\cref{cap:raffica})
+or static (\cref{sec:statici-orari}). The last column marks the fields with a bitmap of missing
+points (\cref{sec:mascheratura}); w.e.\ stands for water equivalent.
+
+{\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{longtable}{@{}lrp{4.4cm}lp{2.2cm}lc@{}}
+  \caption{The 90 variables of the archive.}\label{tab:inventario}\\
+  \toprule
+  Field & paramId & ECMWF name & Units & Level & Sampling & Bitmap \\
+  \midrule
+  \endfirsthead
+  \toprule
+  Field & paramId & ECMWF name & Units & Level & Sampling & Bitmap \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+  \campo{cc} & 248 & Fraction of cloud cover & 0--1 & 13 pressure levels & instantaneous &  \\
+  \campo{ciwc} & 247 & Specific cloud ice water content & \si{kg/kg} & 13 pressure levels & instantaneous &  \\
+  \campo{clwc} & 246 & Specific cloud liquid water content & \si{kg/kg} & 13 pressure levels & instantaneous &  \\
+  \campo{crwc} & 75 & Specific rain water content & \si{kg/kg} & 13 pressure levels & instantaneous &  \\
+  \campo{cswc} & 76 & Specific snow water content & \si{kg/kg} & 13 pressure levels & instantaneous &  \\
+  \campo{q} & 133 & Specific humidity & \si{kg/kg} & 13 pressure levels & instantaneous &  \\
+  \campo{r} & 157 & Relative humidity & \si{\percent} & 13 pressure levels & instantaneous &  \\
+  \campo{t} & 130 & Temperature & \si{K} & 13 pressure levels & instantaneous &  \\
+  \campo{u} & 131 & U component of wind & \si{m/s} & 13 pressure levels & instantaneous &  \\
+  \campo{v} & 132 & V component of wind & \si{m/s} & 13 pressure levels & instantaneous &  \\
+  \campo{w} & 135 & Vertical velocity & \si{Pa/s} & 13 pressure levels & instantaneous &  \\
+  \campo{wz} & 260238 & Geometric vertical velocity & \si{m/s} & 13 pressure levels & instantaneous &  \\
+  \campo{z} & 129 & Geopotential & \si{m^2/s^2} & 13 pressure levels & instantaneous &  \\
+  \campo{100u} & 228246 & 100 metre U wind component & \si{m/s} & \SI{100}{m} & instantaneous &  \\
+  \campo{100v} & 228247 & 100 metre V wind component & \si{m/s} & \SI{100}{m} & instantaneous &  \\
+  \campo{10fg} & 49 & Maximum 10 metre wind gust since previous post-processing & \si{m/s} & \SI{10}{m} & hourly maximum &  \\
+  \campo{10u} & 165 & 10 metre U wind component & \si{m/s} & \SI{10}{m} & instantaneous &  \\
+  \campo{10v} & 166 & 10 metre V wind component & \si{m/s} & \SI{10}{m} & instantaneous &  \\
+  \campo{200u} & 228239 & 200 metre U wind component & \si{m/s} & \SI{200}{m} & instantaneous &  \\
+  \campo{200v} & 228240 & 200 metre V wind component & \si{m/s} & \SI{200}{m} & instantaneous &  \\
+  \campo{2d} & 168 & 2 metre dewpoint temperature & \si{K} & \SI{2}{m} & instantaneous &  \\
+  \campo{2r} & 260242 & 2 metre relative humidity & \si{\percent} & \SI{2}{m} & instantaneous &  \\
+  \campo{2t} & 167 & 2 metre temperature & \si{K} & \SI{2}{m} & instantaneous &  \\
+  \campo{vwsh} & 260068 & Vertical speed shear & \si{s^{-1}} & \SI{100}{m} & instantaneous &  \\
+  \campo{msl} & 151 & Mean sea level pressure & \si{Pa} & sea level & instantaneous &  \\
+  \campo{hcc} & 188 & High cloud cover & 0--1 & column & instantaneous &  \\
+  \campo{lcc} & 186 & Low cloud cover & 0--1 & column & instantaneous &  \\
+  \campo{mcc} & 187 & Medium cloud cover & 0--1 & column & instantaneous &  \\
+  \campo{tcc} & 164 & Total cloud cover & 0--1 & column & instantaneous &  \\
+  \campo{tciw} & 79 & Total column cloud ice water & \si{kg/m^2} & column & instantaneous &  \\
+  \campo{tclw} & 78 & Total column cloud liquid water & \si{kg/m^2} & column & instantaneous &  \\
+  \campo{tcrw} & 228089 & Total column rain water & \si{kg/m^2} & column & instantaneous &  \\
+  \campo{tcsw} & 228090 & Total column snow water & \si{kg/m^2} & column & instantaneous &  \\
+  \campo{tcw} & 136 & Total column water & \si{kg/m^2} & column & instantaneous &  \\
+  \campo{tcwv} & 137 & Total column vertically-integrated water vapour & \si{kg/m^2} & column & instantaneous &  \\
+  \campo{al} & 174 & Albedo (climatological) & 0--1 & surface & instantaneous &  \\
+  \campo{ci} & 31 & Sea ice area fraction & 0--1 & surface & instantaneous & yes \\
+  \campo{cl} & 26 & Lake cover & 0--1 & surface & static &  \\
+  \campo{cvh} & 28 & High vegetation cover & 0--1 & surface & static &  \\
+  \campo{cvl} & 27 & Low vegetation cover & 0--1 & surface & static &  \\
+  \campo{fal} & 243 & Forecast albedo & 0--1 & surface & instantaneous & yes \\
+  \campo{fsr} & 244 & Forecast surface roughness & \si{m} & surface & instantaneous &  \\
+  \campo{iews} & 229 & Instantaneous eastward turbulent surface stress & \si{N/m^2} & surface & instantaneous &  \\
+  \campo{inss} & 230 & Instantaneous northward turbulent surface stress & \si{N/m^2} & surface & instantaneous &  \\
+  \campo{lsm} & 172 & Land-sea mask & 0--1 & surface & instantaneous &  \\
+  \campo{ro} & 205 & Runoff & \si{m} & surface & accumulated &  \\
+  \campo{rsn} & 33 & Snow density & \si{kg/m^3} & surface & instantaneous &  \\
+  \campo{sd} & 141 & Snow depth & \si{m} w.e. & surface & instantaneous &  \\
+  \campo{sdor} & 160 & Standard deviation of sub-gridscale orography & \si{m} & surface & instantaneous &  \\
+  \campo{sf} & 144 & Snowfall & \si{m} w.e. & surface & accumulated &  \\
+  \campo{skt} & 235 & Skin temperature & \si{K} & surface & instantaneous &  \\
+  \campo{slor} & 163 & Slope of sub-gridscale orography & -- & surface & instantaneous &  \\
+  \campo{slt} & 43 & Soil type & code & surface & static & yes \\
+  \campo{snowc} & 260038 & Snow cover & \si{\percent} & surface & instantaneous &  \\
+  \campo{sp} & 134 & Surface pressure & \si{Pa} & surface & instantaneous &  \\
+  \campo{src} & 198 & Skin reservoir content & \si{m} w.e. & surface & instantaneous &  \\
+  \campo{sro} & 8 & Surface runoff & \si{m} & surface & accumulated &  \\
+  \campo{ssr} & 176 & Surface net short-wave (solar) radiation & \si{J/m^2} & surface & accumulated &  \\
+  \campo{ssrc} & 210 & Surface net short-wave (solar) radiation, clear sky & \si{J/m^2} & surface & accumulated &  \\
+  \campo{ssrd} & 169 & Surface short-wave (solar) radiation downwards & \si{J/m^2} & surface & accumulated &  \\
+  \campo{ssrdc} & 228129 & Surface short-wave (solar) radiation downward clear-sky & \si{J/m^2} & surface & accumulated &  \\
+  \campo{ssro} & 9 & Sub-surface runoff & \si{m} & surface & accumulated &  \\
+  \campo{sst} & 34 & Sea surface temperature & \si{K} & surface & instantaneous & yes \\
+  \campo{stl1} & 139 & Soil temperature level 1 & \si{K} & surface & instantaneous & yes \\
+  \campo{stl2} & 170 & Soil temperature level 2 & \si{K} & surface & instantaneous & yes \\
+  \campo{stl3} & 183 & Soil temperature level 3 & \si{K} & surface & instantaneous & yes \\
+  \campo{stl4} & 236 & Soil temperature level 4 & \si{K} & surface & instantaneous & yes \\
+  \campo{str} & 177 & Surface net long-wave (thermal) radiation & \si{J/m^2} & surface & accumulated &  \\
+  \campo{strc} & 211 & Surface net long-wave (thermal) radiation, clear sky & \si{J/m^2} & surface & accumulated &  \\
+  \campo{strd} & 175 & Surface long-wave (thermal) radiation downwards & \si{J/m^2} & surface & accumulated &  \\
+  \campo{strdc} & 228130 & Surface long-wave (thermal) radiation downward clear-sky & \si{J/m^2} & surface & accumulated &  \\
+  \campo{swvl1} & 39 & Volumetric soil water layer 1 & \si{m^3/m^3} & surface & instantaneous & yes \\
+  \campo{swvl2} & 40 & Volumetric soil water layer 2 & \si{m^3/m^3} & surface & instantaneous & yes \\
+  \campo{swvl3} & 41 & Volumetric soil water layer 3 & \si{m^3/m^3} & surface & instantaneous & yes \\
+  \campo{swvl4} & 42 & Volumetric soil water layer 4 & \si{m^3/m^3} & surface & instantaneous & yes \\
+  \campo{tirf} & 235015 & Time integral of rain flux & \si{kg/m^2} & surface & accumulated &  \\
+  \campo{tp} & 228 & Total precipitation & \si{m} & surface & accumulated &  \\
+  \campo{tsn} & 238 & Temperature of snow layer & \si{K} & surface & instantaneous & yes \\
+  \campo{tvh} & 30 & Type of high vegetation & code 4.234 & surface & static &  \\
+  \campo{tvl} & 29 & Type of low vegetation & code 4.234 & surface & static & yes \\
+  \campo{z} & 129 & Geopotential & \si{m^2/s^2} & surface & instantaneous &  \\
+  \campo{zust} & 228003 & Friction velocity & \si{m/s} & surface & instantaneous &  \\
+  \campo{dl} & 228007 & Lake total depth & \si{m} & lake & static & yes \\
+  \campo{tisr} & 212 & TOA incident short-wave (solar) radiation & \si{J/m^2} & top of the atmosphere & accumulated &  \\
+  \campo{tsr} & 178 & Top net short-wave (solar) radiation & \si{J/m^2} & top of the atmosphere & accumulated &  \\
+  \campo{tsrc} & 208 & Top net short-wave (solar) radiation, clear sky & \si{J/m^2} & top of the atmosphere & accumulated &  \\
+  \campo{ttr} & 179 & Top net long-wave (thermal) radiation & \si{J/m^2} & top of the atmosphere & accumulated &  \\
+  \campo{ttrc} & 209 & Top net long-wave (thermal) radiation, clear sky & \si{J/m^2} & top of the atmosphere & accumulated &  \\
+  \campo{mucape} & 228235 & Most-unstable CAPE & \si{J/kg} & most unstable parcel & instantaneous &  \\
+  \campo{mucin} & 228236 & Most-unstable CIN & \si{J/kg} & most unstable parcel & instantaneous & yes \\
+\end{longtable}
+}

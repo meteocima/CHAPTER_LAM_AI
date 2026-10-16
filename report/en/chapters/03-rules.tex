@@ -1,0 +1,112 @@
+\chapter{Rules of correspondence with ERA5}
+\label{cap:regole}
+
+Two rules decide what the archive publishes and where, and they apply to all 90 variables.
+
+\section{Publication rule}
+\label{sec:pubblicazione}
+
+A field is published under an ERA5 name only if the WRF quantity is the one that the ERA5
+parameter defines, or if the difference can be stated in one line. A field that meets neither
+condition is left out of the archive, even when the model computes it. There are two distinct
+reasons for an exclusion. For some WRF fields no ECMWF parameter
+describes the same quantity, for others the parameter exists but ERA5 does not publish it
+(\cref{sec:non-pubblicati}).
+
+Seven fields, in six rows of \cref{tab:approssimazioni}, are published with a declared difference
+from their ERA5 namesake.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Fields published with a declared difference from the ERA5 parameter.}
+  \label{tab:approssimazioni}
+  \begin{tabularx}{\textwidth}{@{}lXXl@{}}
+    \toprule
+    Field & ERA5 parameter & CHAPTER field & Section \\
+    \midrule
+    \campo{slor} & slope of the sub-grid orography & slope of the terrain resolved at \SI{3}{km} & \ref{sec:orografia} \\
+    \campo{10fg} & parameterized gust & hourly maximum of the resolved wind at \SI{10}{m} & \ref{cap:raffica} \\
+    \campo{iews}, \campo{inss} & components of the IFS turbulent surface stress & $\rho u_*^2$, with $\rho$ the air density and $u_*$ the friction velocity, projected onto the direction of the \SI{10}{m} wind & \ref{sec:rugosita} \\
+    \campo{fsr} & effective roughness length, including the parameterized orographic drag & local roughness length \campo{ZNT}, table value of the dominant category modified by snow & \ref{sec:rugosita} \\
+    \campo{lsm} & permanent land--sea mask & hourly WRF mask, which counts sea ice as land & \ref{sec:statici-orari} \\
+    \campo{tcw} & total column water, five species & sum of six species, graupel included & \ref{sec:colonne} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Masking rule}
+\label{sec:mascheratura}
+
+A point is missing where the ERA5 parameter is not defined. A point where the model provides no
+value, or where the value looks wrong, is not missing for that reason. Missing points are written
+as a GRIB bitmap, never as zeros, so a reader of the archive can always tell a point where the
+parameter is not defined from one where it is zero. \Cref{tab:maschere} lists the masked fields.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Fields with missing points and the domain on which they are defined.}
+  \label{tab:maschere}
+  \begin{tabularx}{\textwidth}{@{}lXl@{}}
+    \toprule
+    Field & Defined on & Section \\
+    \midrule
+    \campo{sst}, \campo{ci} & sea cells & \ref{sec:mare} \\
+    \campo{dl} & cells with a lake cover greater than zero (\num{32000}) & \ref{sec:vegetazione} \\
+    \campo{swvl1-4}, \campo{stl1-4}, \campo{slt} & permanent land (\num{1304109} cells) & \ref{sec:suolo}, \ref{sec:vegetazione} \\
+    \campo{tvl} & all cells except the \num{124672} where shrubland dominates & \ref{sec:vegetazione} \\
+    \campo{mucin} & columns with CAPE of at least \SI{100}{J/kg} & \ref{sec:instabilita} \\
+    \campo{tsn} & cells with \campo{SNOWC} above \num{0.9} & \ref{sec:neve} \\
+    \campo{fal} & points with incoming solar radiation at the surface above \SI{50}{W/m^2} & \ref{sec:albedo} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The lake cover \campo{cl} is defined over the sea as well, where it is zero, because a sea cell
+has no lake cover. Four fields are masked for a different reason: at the missing points the WRF
+quantity has no value that corresponds to the ERA5 parameter. \campo{tvl} is missing over
+shrubland, because the ERA5 type table separates evergreen and deciduous shrubs and the MODIS
+classification carries no shrub phenology (\cref{sec:vegetazione}). \campo{tsn} is missing where
+snow does not cover the cell, because there the model field is a soil temperature
+(\cref{sec:neve}). \campo{fal} is missing where the incoming solar radiation at the surface does not
+exceed \SI{50}{W/m^2}; without incoming radiation the ratio of reflected to incoming radiation is
+not defined (\cref{sec:albedo}). \campo{mucin}
+is missing where CAPE is below \SI{100}{J/kg}, because there the routine returns no inhibition
+(\cref{sec:instabilita}).
+
+\subsection{Sea and inland water}
+\label{sec:mare}
+
+Masking \campo{sst} and \campo{ci} requires separating the sea from inland water, and the lake
+class of the static file is not sufficient for this. Class 21 (lake) of the MODIS-IGBP
+classification includes the Black Sea, the Sea of Azov and part of the Baltic, which together make
+up \SI{89}{\percent} of the \num{55881} cells that the static file classifies entirely as lake.
+Masking on that class would remove \campo{sst} from the Black Sea.
+
+The criterion used is the size of the connected component, i.e.\ of the set of water cells
+connected through shared edges. In the domain the largest components have \num{844431} cells (Atlantic,
+Mediterranean, Baltic and North Sea), \num{49841} (Black Sea and Sea of Azov) and \num{8583} (Red
+Sea). The next is Lake Vänern, with \num{1225} cells, the largest lake in the domain. Components of
+at least \num{2000} cells are sea, for a total of \num{902855} sea cells. Any threshold between
+\num{1226} and \num{8583} cells gives the same set.
+
+\section{Static fields and hourly fields}
+\label{sec:statici-orari}
+
+A static field comes from the static file and is therefore identical in every hourly file. The
+static fields are \campo{cl}, \campo{cvh}, \campo{cvl}, \campo{dl}, \campo{slt}, \campo{tvh} and
+\campo{tvl}. The soil columns \campo{swvl1-4} and \campo{stl1-4} change every hour, but their mask
+is the permanent land of the static file.
+
+The land--sea mask \campo{lsm}, by contrast, is the hourly WRF mask (\campo{LANDMASK}), which
+reclassifies as land every water cell covered by sea ice. The mask therefore grows in winter: in a
+file of 20 March 2024 the reclassified cells number \num{2469}, exactly the cells with sea ice.
+Sea ice \campo{ci} is 0 or 1, because the simulation does not use fractional sea ice
+(\campo{FRACTIONAL_SEAICE=0}). The permanent land mask, in the ERA5 sense, is the set of points
+with $\campo{lsm} = 1$ and $\campo{ci} = 0$, counting the missing points of \campo{ci} as zero.
+
+The background albedo \campo{al} also changes in time, with sea ice and at the transition between
+the summer and winter seasons of the land-use table (\cref{sec:albedo}). For \campo{lsm} and
+\campo{al} must be read from the hourly file of the validity time, not from an arbitrary file of
+the archive.

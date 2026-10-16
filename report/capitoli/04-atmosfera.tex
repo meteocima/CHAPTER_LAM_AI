@@ -1,0 +1,290 @@
+\chapter{Atmosfera}
+\label{cap:atmosfera}
+
+\section{Le variabili sui livelli di pressione}
+\label{sec:livelli-pressione}
+
+La \cref{tab:var-pressione} elenca le 13 variabili sui livelli di pressione, 169 messaggi in
+tutto. Oltre a temperatura, vento, umidità e geopotenziale comprendono le due forme della
+velocità verticale, in pressione (\campo{w}) e geometrica (\campo{wz}), la frazione nuvolosa e
+quattro contenuti d'acqua di nube e di precipitazione.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Variabili sui 13 livelli di pressione.}
+  \label{tab:var-pressione}
+  \begin{tabular}{@{}lrll@{}}
+    \toprule
+    Campo & paramId & Descrizione & Unità \\
+    \midrule
+    \campo{cc}   & 248    & frazione nuvolosa & 0--1 \\
+    \campo{ciwc} & 247    & contenuto specifico di ghiaccio di nube & \si{kg/kg} \\
+    \campo{clwc} & 246    & contenuto specifico di acqua liquida di nube & \si{kg/kg} \\
+    \campo{crwc} & 75     & contenuto specifico di pioggia & \si{kg/kg} \\
+    \campo{cswc} & 76     & contenuto specifico di neve & \si{kg/kg} \\
+    \campo{q}    & 133    & umidità specifica & \si{kg/kg} \\
+    \campo{r}    & 157    & umidità relativa & \si{\percent} \\
+    \campo{t}    & 130    & temperatura & \si{K} \\
+    \campo{u}    & 131    & componente zonale del vento & \si{m/s} \\
+    \campo{v}    & 132    & componente meridiana del vento & \si{m/s} \\
+    \campo{w}    & 135    & velocità verticale in pressione & \si{Pa/s} \\
+    \campo{wz}   & 260238 & velocità verticale geometrica & \si{m/s} \\
+    \campo{z}    & 129    & geopotenziale & \si{m^2/s^2} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Contenuti specifici.} WRF porta vapore e idrometeore come \emph{rapporti di mescolanza},
+per chilogrammo di aria secca. ECMWF definisce \campo{q} e i contenuti d'acqua come \emph{contenuti
+specifici}, per chilogrammo di aria umida, e nella massa di aria umida conta aria secca, vapore, acqua di nube,
+ghiaccio, pioggia e neve \parencite{paramdb}. L'archivio divide quindi \campo{q}, \campo{clwc},
+\campo{ciwc}, \campo{crwc}, \campo{cswc} e gli integrali di colonna per lo stesso denominatore,
+$1 + r_t$, dove $r_t$ è il rapporto di mescolanza dell'acqua totale. Sul campo tridimensionale la
+correzione vale lo \SI{0.011}{\percent} in mediana, l'\SI{1.44}{\percent} al 99° percentile e il
+\SI{2.26}{\percent} al massimo.
+
+\paragraph{Frazione nuvolosa.} Con lo schema di Xu--Randall la frazione nuvolosa \campo{cc} è
+continua. Su un sottodominio di $500 \times 600$ celle solo fra il \SI{18}{\percent} e il
+\SI{22}{\percent} dei punti nuvolosi vale esattamente 1, e gli altri coprono tutto l'intervallo fra 0 e 1.
+
+\paragraph{Umidità relativa.} Il campo \campo{r} è l'umidità relativa di ECMWF, calcolata sulla fase
+mista con le equazioni 7.5, 7.6, 7.89 e 7.90 della documentazione IFS Cy41r2, il ciclo con cui è
+stato prodotto ERA5 \parencite{era5doc}, e con le costanti di quel ciclo \parencite{ifs41r2p4}. La pressione di vapore
+saturo è
+\begin{equation}
+  e_\text{sat}(T) = \alpha(T)\, e_\text{sat,w}(T) + \bigl(1 - \alpha(T)\bigr)\, e_\text{sat,i}(T),
+  \qquad
+  \alpha(T) = \left(\frac{T - T_\text{ice}}{T_0 - T_\text{ice}}\right)^{2},
+  \label{eq:fase-mista}
+\end{equation}
+dove $T$ è la temperatura, $e_\text{sat,w}$ ed $e_\text{sat,i}$ sono le pressioni di vapore saturo sull'acqua e sul
+ghiaccio (formula di Tetens), $T_\text{ice} = \SI{250.16}{K}$, $T_0 = \SI{273.16}{K}$, e $\alpha$ vale
+0 sotto $T_\text{ice}$ e 1 sopra $T_0$. Sotto $T_\text{ice}$ questa umidità relativa differisce fino a
+un fattore \num{1.8} da quella calcolata sull'acqua liquida. Il campo non è troncato a \SI{100}{\percent}:
+la sovrasaturazione è uno stato del modello, e anche ERA5 la pubblica. Nel file orario del 15 luglio 2024 alle 12 UTC
+\campo{r} raggiunge il \SI{139.7}{\percent} a \SI{300}{\hPa} nel regime del ghiaccio, e \num{34785} punti
+superano il \SI{100}{\percent} a \SI{400}{\hPa}. Un sistema di acquisizione che scarta valori
+sopra il \SI{100}{\percent} scarta dati validi.
+
+\paragraph{Geopotenziale.} Il geopotenziale pubblicato è $z = g_0\, z_\text{WRF}$, con
+$g_0 = \SI{9.80665}{m/s^2}$ la gravità standard e $z_\text{WRF}$ l'altezza geopotenziale del
+modello. Dividendo \campo{z} per $g_0$ si ritrova esattamente l'altezza del modello, in superficie
+e su ogni livello di pressione, e il geopotenziale di superficie e quello dei livelli seguono la
+stessa convenzione, verificata punto per punto sulle \num{1349910} celle di terra con quota sopra
+\SI{1}{m} del 15 luglio 2024 alle 12 UTC. WRF però integra l'equazione idrostatica con
+$g = \SI{9.81}{m/s^2}$, e l'archivio si discosta quindi dello \SI{0.034}{\percent} dall'equilibrio
+idrostatico rispetto alle proprie \campo{t} e pressione: una parte su \num{2900}, circa \SI{2}{m} a
+\SI{500}{\hPa} e \SI{7}{m} a \SI{50}{\hPa} \parencite{issue39}. Le due proprietà, \campo{z} diviso per $g_0$
+uguale all'altezza del modello ed equilibrio idrostatico con \campo{t} e pressione del modello, non
+si possono avere insieme.
+
+\section{Sotto il terreno}
+\label{sec:sotto-terreno}
+
+Dove un livello di pressione sta sotto il terreno, l'archivio pubblica il valore del livello del
+modello più basso, così com'è, senza estrapolare né riempire (\emph{clamping}). Sotto il terreno
+\campo{t} coincide esattamente con il livello del modello più basso, \campo{q} entro
+\SI{1e-9}{kg/kg} e \campo{z} entro \SI{2.5e-4}{m} \parencite{issue44}. Il valore è uno stato reale
+del modello, preso fra \SI{24}{m} e \SI{27}{m} sopra il terreno, e resta coerente con i campi vicino alla superficie. A luglio
+$\campo{2t} - \campo{t}(\SI{1000}{\hPa})$ sotto il terreno vale \SI{-0.9}{K} a mezzanotte e
+\SI{+1.4}{K} a mezzogiorno, cioè un'inversione notturna e uno strato superadiabatico diurno nei circa
+\SI{22}{m} fra il livello di \SI{2}{m} e il livello del modello più basso. Sotto il terreno
+\campo{r} arriva a circa il \SI{163}{\percent}, perché accoppia l'umidità del livello del modello
+più basso con la pressione nominale di \SI{1000}{\hPa}.
+
+Il prezzo è che \campo{z} contraddice \campo{sp}. Dove la pressione di superficie dice che
+\SI{1000}{\hPa} è sotto il terreno, il geopotenziale pubblicato a \SI{1000}{\hPa} lo mette in mediana
+fra \SI{24}{m} e \SI{27}{m} sopra. Succede sul \SI{47.6}{\percent} del dominio a \SI{1000}{\hPa} e sul
+\SI{9}{\percent} a \SI{925}{\hPa}. ERA5 invece estrapola sotto il terreno con un gradiente termico,
+e i due archivi differiscono per convenzione proprio dove \SI{1000}{\hPa} è sotto il terreno. Da qui
+viene tutta la differenza a \SI{1000}{\hPa}: sul campione di verifica il bias di \campo{t} rispetto a
+ERA5 è \SI{-1.71}{K} a \SI{1000}{\hPa} contro \SI{-0.05}{K} a \SI{850}{\hPa}, e la correlazione di
+\campo{z} con ERA5 a \SI{1000}{\hPa} è \num{0.108}. Per un confronto con ERA5 o per calcolare spessori,
+i livelli sotto il terreno vanno mascherati con \campo{sp}, che è nello stesso file orario.
+
+\section{Il livello di \SI{50}{\hPa}}
+\label{sec:livello-50}
+
+Il top del modello è a \SI{50}{\hPa} (\cref{sec:dominio}), e il livello del modello più alto dove
+WRF definisce la temperatura sta sempre sotto, per esempio a \SI{51.9}{\hPa} in media sul dominio il
+19 gennaio 2024 alle 00 UTC. Il livello di pressione di \SI{50}{\hPa} sta quindi sopra il livello
+del modello più alto, e l'interpolazione
+verticale vi ripete i valori di quel livello, come fa il clamping sotto il terreno
+(\cref{sec:sotto-terreno}). In quell'istante \campo{t} a \SI{50}{\hPa} coincide con la temperatura
+del livello del modello più alto entro la precisione di codifica, \SI{0.009}{K}, e $\campo{z}/g_0$
+con la sua altezza geopotenziale entro \SI{1}{m}; lo stesso vale per gli altri campi a
+\SI{50}{\hPa}. Nello stesso istante lo strato fra il livello del modello più alto e
+\SI{50}{\hPa} ha uno spessore idrostatico di \SI{227}{m} in media, fra \SI{214}{m} e \SI{239}{m} sul dominio, e di tanto
+$\campo{z}/g_0$ a \SI{50}{\hPa} sta sotto la quota del livello di pressione di \SI{50}{\hPa}. Lo
+spessore fra \SI{100}{\hPa} e \SI{50}{\hPa} calcolato dall'archivio, \SI{4009}{m} in media, è quindi
+più corto di circa il \SI{5.4}{\percent} dello spessore idrostatico, circa \SI{4236}{m}. Un vento
+geostrofico calcolato con \campo{z} a \SI{50}{\hPa} risente della variazione orizzontale dello
+spessore mancante, \SI{25}{m} fra il minimo e il massimo sul dominio.
+
+\section{Campi vicino alla superficie}
+\label{sec:vicino-superficie}
+
+La \cref{tab:var-quota} elenca i campi a quota fissa sopra il suolo e la pressione al livello del
+mare.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Campi a quota fissa e pressione al livello del mare.}
+  \label{tab:var-quota}
+  \begin{tabular}{@{}lrlll@{}}
+    \toprule
+    Campo & paramId & Descrizione & Unità & Quota \\
+    \midrule
+    \campo{10u}, \campo{10v}   & 165, 166       & componenti del vento & \si{m/s} & \SI{10}{m} \\
+    \campo{100u}, \campo{100v} & 228246, 228247 & componenti del vento & \si{m/s} & \SI{100}{m} \\
+    \campo{200u}, \campo{200v} & 228239, 228240 & componenti del vento & \si{m/s} & \SI{200}{m} \\
+    \campo{10fg} & 49     & massimo orario del vento risolto & \si{m/s} & \SI{10}{m} \\
+    \campo{2t}   & 167    & temperatura & \si{K} & \SI{2}{m} \\
+    \campo{2d}   & 168    & temperatura di rugiada & \si{K} & \SI{2}{m} \\
+    \campo{2r}   & 260242 & umidità relativa & \si{\percent} & \SI{2}{m} \\
+    \campo{vwsh} & 260068 & shear verticale del vento fra 10 e \SI{100}{m} & \si{s^{-1}} & \SI{100}{m} \\
+    \campo{msl}  & 151    & pressione al livello del mare & \si{Pa} & livello del mare \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Umidità relativa a \SI{2}{m}.} \campo{2r} è l'umidità relativa sull'acqua liquida a ogni
+temperatura, la convenzione dell'Organizzazione Meteorologica Mondiale per le misure di umidità
+in capannina \parencite{wmo8}, cioè per le osservazioni con cui si confronta un'umidità a
+\SI{2}{m}. ERA5 non pubblica
+un'umidità relativa a \SI{2}{m}. \campo{r} e \campo{2r} seguono quindi due definizioni diverse e
+differiscono dove la temperatura è sotto $T_0$. Un profilo che mette \campo{2r} alla base di \campo{r}, o un gradiente
+verticale di umidità calcolato fra i due, mescola due grandezze. Per averle nella stessa
+convenzione si ricalcola l'umidità relativa da \campo{q}, \campo{t} e \campo{sp}, tutti pubblicati.
+
+\paragraph{Temperatura di rugiada.} L'inversione che ricava la temperatura di rugiada dal vapore dà,
+nei punti saturi, un \campo{2d} che supera \campo{2t} di \SI{0.0133}{K}, lo stesso in ogni istante e
+in ogni stagione. In quattro istanti di gennaio 2024, luglio 2024 e
+febbraio 2025 i punti sono fra \num{6161} e \num{64005}, tutti con umidità relativa del
+\SI{100}{\percent} \parencite{issue42}. Il valore è lasciato così. Troncare \campo{2d} a \campo{2t} toglierebbe gli incroci
+visibili ma lascerebbe lo stesso scarto in ogni punto non saturo, introdurrebbe un gomito nel campo
+al \SI{100}{\percent} e romperebbe la coerenza fra \campo{2d} e il vapore a \SI{2}{m} del modello (\campo{Q2}), che è
+entro un errore relativo fra \num{3.6e-4} e \num{1.1e-2} sulla pressione di vapore.
+Un'umidità relativa ricostruita da \campo{2t} e \campo{2d} arriva quindi al \SI{100.09}{\percent}.
+
+\section{Colonne e nubi}
+\label{sec:colonne}
+
+La \cref{tab:var-colonna} elenca gli integrali di colonna e le coperture nuvolose.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Integrali di colonna e coperture nuvolose.}
+  \label{tab:var-colonna}
+  \begin{tabular}{@{}lrll@{}}
+    \toprule
+    Campo & paramId & Descrizione & Unità \\
+    \midrule
+    \campo{tcwv} & 137    & vapore d'acqua totale in colonna & \si{kg/m^2} \\
+    \campo{tclw} & 78     & acqua liquida di nube in colonna & \si{kg/m^2} \\
+    \campo{tciw} & 79     & ghiaccio di nube in colonna & \si{kg/m^2} \\
+    \campo{tcrw} & 228089 & pioggia in colonna & \si{kg/m^2} \\
+    \campo{tcsw} & 228090 & neve in colonna & \si{kg/m^2} \\
+    \campo{tcw}  & 136    & acqua totale in colonna & \si{kg/m^2} \\
+    \campo{tcc}  & 164    & copertura nuvolosa totale & 0--1 \\
+    \campo{hcc}  & 188    & copertura nuvolosa alta & 0--1 \\
+    \campo{mcc}  & 187    & copertura nuvolosa media & 0--1 \\
+    \campo{lcc}  & 186    & copertura nuvolosa bassa & 0--1 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Acqua totale.} ECMWF definisce \campo{tcw} come la somma di cinque specie, vapore,
+acqua liquida, ghiaccio, pioggia e neve \parencite{paramdb}. L'archivio somma sei specie, perché include il graupel
+\parencite{issue47}. ECMWF definisce un contenuto di graupel (paramId 260028, \campo{grle}) e una
+sua colonna (260001, \campo{tcolg}) \parencite{paramdb}, ma ERA5 non pubblica nessuno dei due, e il graupel sta solo
+dentro \campo{tcw}. Ricostruire \campo{tcw} come $\campo{tcwv} + \campo{tclw} + \campo{tciw} +
+\campo{tcrw} + \campo{tcsw}$ non lo riproduce, e il residuo è la colonna di graupel. Nei quattro
+istanti esaminati, il 15 gennaio, aprile, luglio e ottobre 2024 alle 12 UTC, il residuo è in media
+di dominio lo \SI{0.4}{\percent} del condensato. Il suo massimo è \SI{5.69}{kg/m^2} in gennaio,
+\SI{13.89}{kg/m^2} in aprile, \SI{16.73}{kg/m^2} in ottobre e \SI{26.46}{kg/m^2} in luglio, in una
+cella convettiva in cui supera tutto il resto del condensato della colonna.
+
+\paragraph{Copertura nuvolosa.} \campo{tcc}, \campo{hcc}, \campo{mcc} e \campo{lcc} sono
+sovrapposizioni maximum-random della frazione nuvolosa \campo{CLDFRA} di WRF. Sul campione di
+verifica, con i campi CHAPTER aggregati sulla griglia ERA5, il rapporto delle medie è \num{0.783}
+per la copertura totale e \num{0.610} per quella alta (\cref{tab:nubi}), e la copertura totale
+CHAPTER è più bassa di quella ERA5 in ognuno dei 34 istanti \parencite{issue48}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Coperture nuvolose e ghiaccio di nube in colonna (\si{kg/m^2}): medie sul campione di
+  verifica, sulla griglia ERA5.}
+  \label{tab:nubi}
+  \begin{tabular}{@{}lSSS@{}}
+    \toprule
+    Campo & {CHAPTER} & {ERA5} & {Rapporto delle medie} \\
+    \midrule
+    \campo{tcc}  & 0.381  & 0.487  & 0.783 \\
+    \campo{hcc}  & 0.169  & 0.276  & 0.610 \\
+    \campo{mcc}  & 0.161  & 0.205  & 0.786 \\
+    \campo{lcc}  & 0.231  & 0.268  & 0.862 \\
+    \campo{tciw} & 0.0185 & 0.0166 & 1.109 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Il divario non viene dall'ipotesi di sovrapposizione. Calcolata punto per punto sulla
+\campo{CLDFRA} dell'archivio, l'intera gamma delle ipotesi possibili, dalla sovrapposizione massima
+a quella casuale, è larga fra il \SI{2}{\percent} e il \SI{4}{\percent}, mentre la copertura totale
+ERA5 supera quella CHAPTER del \SI{28}{\percent}: l'ipotesi spiega al più un settimo del divario.
+Il divario sta nella \campo{CLDFRA} stessa, il diagnostico di Xu--Randall. Il ghiaccio di nube in
+colonna vale \num{1.109} volte quello di ERA5 mentre \campo{hcc} ne vale \num{0.610}, e lo schema
+attribuisce quindi al condensato presente una frazione nuvolosa minore di quella di ERA5. Una parte
+del divario viene dalla risoluzione. La copertura CHAPTER è sovrapposta a \SI{3}{km} e poi
+aggregata, quella di ERA5 è sovrapposta su un profilo già liscio a \SI{31}{km}, e a parità di
+frazioni per strato dà una copertura maggiore. Anche questo effetto è limitato dalla stessa gamma,
+fra il \SI{2}{\percent} e il \SI{4}{\percent}.
+
+\section{Instabilità}
+\label{sec:instabilita}
+
+\campo{mucape} (paramId 228235) e \campo{mucin} (228236), in \si{J/kg}, sono l'energia potenziale
+convettiva disponibile (CAPE) e l'inibizione convettiva della particella più instabile, cioè della
+particella mescolata su \SI{500}{m} con la massima temperatura potenziale equivalente nei
+\SI{3}{km} più bassi. Non sono calcolate dalla superficie.
+
+La routine che calcola le due grandezze restituisce un'inibizione solo nelle colonne con CAPE di
+almeno \SI{100}{J/kg}, e altrove \campo{mucin} è un punto mancante (bitmap). Uno zero in quelle
+colonne direbbe che nulla frena la convezione proprio dove la frena di più, perché una colonna
+senza CAPE è normalmente una colonna con molta inibizione: dove \campo{mucin} è mancante, ERA5 porta
+un'inibizione media fra \SI{25}{J/kg} e \SI{265}{J/kg}. Riempire i punti mancanti con zeri
+insegnerebbe a un modello statistico che le situazioni con poca CAPE non hanno inibizione, cioè il
+contrario della fisica.
+
+La frazione di dominio in cui \campo{mucin} è presente va dal \SI{3.8}{\percent} in gennaio al
+\SI{28.8}{\percent} in luglio (\cref{tab:mucin}). Dove è presente, \campo{mucin} vale fra \num{0.03}
+e \num{0.24} volte quello di ERA5, perché le colonne in cui esiste sono le meno inibite.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Frazione del dominio in cui \campo{mucin} è presente, alle 12 UTC.}
+  \label{tab:mucin}
+  \begin{tabular}{@{}lSS@{}}
+    \toprule
+    Istante di validità & {Presente (\si{\percent})} & {Mancante (\si{\percent})} \\
+    \midrule
+    2024-01-15 & 3.8  & 96.2 \\
+    2024-02-15 & 5.7  & 94.3 \\
+    2024-03-15 & 4.8  & 95.2 \\
+    2024-07-15 & 28.8 & 71.2 \\
+    2024-10-15 & 15.2 & 84.8 \\
+    2025-02-15 & 5.5  & 94.5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\campo{mucape} è invece denso, senza punti mancanti: dove la routine non trova CAPE, lo zero
+pubblicato è il valore corretto. Vale zero su \num{1536450} dei \num{2220273} punti
+(\SI{69.2}{\percent}) il 15 febbraio 2024 e su \num{1020809} (\SI{46.0}{\percent}) il 15 luglio
+2024, entrambi alle 12 UTC, e su \num{744745} (\SI{33.5}{\percent}) il 4 settembre 2024 alle 15 UTC.

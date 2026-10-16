@@ -1,0 +1,199 @@
+\chapter{Radiazione, temperatura di pelle e scambi di superficie}
+\label{cap:superficie}
+
+Sul campione di verifica l'archivio porta più radiazione solare discendente in superficie di ERA5
+(\num{1.136} volte), meno copertura nuvolosa totale (\num{0.783} volte), e una temperatura di pelle
+sulla terra più fredda di \SI{1.64}{K}. Radiazione, nubi e bilancio energetico della superficie vanno
+quindi letti insieme.
+
+\section{Radiazione}
+\label{sec:radiazione}
+
+I 13 flussi radiativi della \cref{tab:radiazione} sono campi accumulati sull'ora che termina
+all'istante di validità, in \si{J/m^2} (\cref{sec:tempo}).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Flussi radiativi, accumulati sull'ora che termina all'istante di validità.}
+  \label{tab:radiazione}
+  \begin{tabular}{@{}lrl@{}}
+    \toprule
+    Campo & paramId & Descrizione \\
+    \midrule
+    \campo{ssrd}  & 169    & radiazione solare discendente in superficie \\
+    \campo{ssrdc} & 228129 & radiazione solare discendente in superficie, cielo sereno \\
+    \campo{ssr}   & 176    & radiazione solare netta in superficie \\
+    \campo{ssrc}  & 210    & radiazione solare netta in superficie, cielo sereno \\
+    \campo{strd}  & 175    & radiazione termica discendente in superficie \\
+    \campo{strdc} & 228130 & radiazione termica discendente in superficie, cielo sereno \\
+    \campo{str}   & 177    & radiazione termica netta in superficie \\
+    \campo{strc}  & 211    & radiazione termica netta in superficie, cielo sereno \\
+    \campo{tisr}  & 212    & radiazione solare incidente al top dell'atmosfera \\
+    \campo{tsr}   & 178    & radiazione solare netta al top dell'atmosfera \\
+    \campo{tsrc}  & 208    & radiazione solare netta al top dell'atmosfera, cielo sereno \\
+    \campo{ttr}   & 179    & radiazione termica netta al top dell'atmosfera \\
+    \campo{ttrc}  & 209    & radiazione termica netta al top dell'atmosfera, cielo sereno \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+La radiazione solare in superficie è più alta di quella di ERA5: la discendente
+dell'\SI{8.5}{\percent} in cielo sereno e del \SI{13.6}{\percent} con le nubi (\cref{tab:rad-era5})
+\parencite{issue45}. La simulazione non ha aerosol (\campo{aer_opt=0}), mentre ERA5 usa la
+climatologia degli aerosol di \textcite{tegen1997}. Il flusso in cielo sereno isola l'atmosfera
+senza nubi, e i campi termici, su cui l'aerosol non agisce, concordano con ERA5 entro
+l'\SI{1.1}{\percent}: il confronto attribuisce all'assenza di aerosol l'eccesso in cielo sereno.
+Con le nubi l'eccesso cresce, perché la copertura nuvolosa totale vale \num{0.783} volte quella di
+ERA5 (\cref{sec:colonne}) e lascia passare più radiazione. Per applicazioni di energia solare o per l'addestramento contro
+osservazioni di piranometro l'archivio porta un eccesso sistematico di questa entità, che è una
+proprietà della simulazione e che la conversione non può togliere.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Rapporto delle medie fra CHAPTER ed ERA5 sul campione di verifica, con i campi CHAPTER
+  aggregati sulla griglia ERA5.}
+  \label{tab:rad-era5}
+  \begin{tabular}{@{}lS@{}}
+    \toprule
+    Campo & {CHAPTER / ERA5} \\
+    \midrule
+    \campo{ssrdc} & 1.085 \\
+    \campo{ssrd}  & 1.136 \\
+    \campo{ssrc}  & 1.116 \\
+    \campo{ssr}   & 1.178 \\
+    \campo{tsrc}  & 1.031 \\
+    \campo{strd}  & 0.989 \\
+    \campo{strdc} & 0.996 \\
+    \campo{ttr}   & 1.009 \\
+    \campo{ttrc}  & 0.990 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Temperatura di pelle}
+\label{sec:pelle}
+
+La simulazione non ha scritto la temperatura di pelle del modello (\campo{TSK}), e l'archivio la
+ricostruisce come \campo{skt} dalla radiazione termica uscente in superficie. Il flusso ascendente
+$F^{\uparrow}$ (\campo{LWUPB} in WRF) è
+\begin{equation}
+  F^{\uparrow} = \varepsilon \sigma T_s^4 + (1 - \varepsilon) F^{\downarrow},
+  \label{eq:lwup}
+\end{equation}
+con $\varepsilon$ l'emissività della superficie, $\sigma$ la costante di Stefan--Boltzmann, $T_s$ la
+temperatura di pelle e $F^{\downarrow}$ il flusso termico discendente in superficie (\campo{GLW}). L'emissività
+si ricava dalla simulazione stessa. RRTMG calcola anche i flussi
+in cielo sereno, con la stessa emissività e la stessa temperatura di pelle e un diverso flusso
+discendente. Sottraendo le due forme della \cref{eq:lwup} la temperatura scompare:
+\begin{equation}
+  \varepsilon = 1 - \frac{F^{\uparrow} - F^{\uparrow}_\text{cs}}{F^{\downarrow} - F^{\downarrow}_\text{cs}},
+  \label{eq:emissivita}
+\end{equation}
+dove il pedice cs indica il cielo sereno. L'espressione è un'identità, senza temperatura di
+riferimento e senza parametri stimati. Misurata così, l'emissività di categoria è la stessa in ogni
+cella con la stessa categoria dominante, con uno scarto interquartile nullo alla quarta cifra
+decimale, e vale \num{0.98000} sull'acqua. I valori per categoria
+coincidono con la colonna \campo{LEMI} della sezione \campo{MODI-RUC} di \campo{VEGPARM.TBL}
+\parencite{wrf411}, da \num{0.850} sul suolo nudo a \num{0.980} sull'acqua.
+
+Con la neve l'emissività passa a \num{0.98} per tutte le categorie. L'archivio applica \num{0.98}
+dove la copertura nevosa \campo{SNOWC} supera la soglia di copertura nevosa, \num{0.015}
+(\SI{1.5}{\percent}), e sotto la soglia raccorda i due valori. La soglia di copertura nevosa è
+l'unico parametro della ricostruzione non letto dalla simulazione: è stata scelta come il minimo dell'errore sulla
+temperatura di pelle in una scansione sui 34 istanti del campione di verifica.
+
+L'accuratezza dipende dalla stagione (\cref{tab:skt}). Sull'acqua aperta, dove la temperatura di
+pelle del modello è la temperatura del mare, la ricostruzione la ritrova con un errore quadratico
+medio di \SI{0.0005}{K} su circa \num{910000} punti, in ogni istante del campione di verifica. Sulla terra l'emissività
+ricostruita coincide con quella del modello entro $10^{-4}$ sul \SI{99.98}{\percent} dei punti a
+luglio e sul \SI{93.05}{\percent} a gennaio. Tutta la differenza fra le stagioni viene dalla regola
+della neve. Sulla terra senza neve la temperatura di pelle ricostruita differisce dalla temperatura del nodo
+del suolo a \SI{0}{cm} (\campo{TSLB}) di \SI{0.026}{K} in errore quadratico medio, il 4 settembre
+2024 alle 16 UTC.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Accuratezza della temperatura di pelle ricostruita rispetto allo stato del modello.}
+  \label{tab:skt}
+  \begin{tabularx}{\textwidth}{@{}Xl@{}}
+    \toprule
+    Grandezza & Valore \\
+    \midrule
+    acqua aperta, errore quadratico medio (errore assoluto massimo) & \SI{0.0005}{K} (\SI{0.002}{K}) \\
+    terra, punti con emissività entro $10^{-4}$ & \SI{99.98}{\percent} a luglio, \SI{93.05}{\percent} a gennaio \\
+    terra, errore quadratico medio a luglio & \SI{0.0012}{K} \\
+    terra, errore quadratico medio a gennaio e febbraio & da \SI{0.084}{K} a \SI{0.119}{K} \\
+    terra, gennaio e febbraio, errore assoluto al 99° percentile (massimo) & \SI{0.81}{K} (\SI{2.79}{K}) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Rispetto a ERA5 la temperatura di pelle sulla terra è più fredda di \SI{1.64}{K} in media sui 34
+istanti del campione di verifica. Lo scarto, CHAPTER meno ERA5, va da \SI{-0.5}{K} a \SI{-1.2}{K}
+fra gli istanti delle 00 UTC\todo{istanti delle 00 UTC da rimisurare sui file della run del giorno prima (issue 72)} e da \SI{-0.8}{K} a \SI{-3.24}{K} fra quelli delle 12 UTC, con il
+valore più freddo il 15 settembre 2024. Sul mare lo scarto è \SI{+0.01}{K}, e la correlazione con
+ERA5 è fra \num{0.95} e \num{0.98} sia sulla terra sia sul mare \parencite{issue57}. Sul mare, dove
+le due rianalisi usano quasi la stessa temperatura del mare, lo scarto di \SI{0.01}{K} esclude come
+causa la ricostruzione, l'emissività e la codifica. L'errore della ricostruzione sulla terra, al più
+\SI{0.119}{K} in errore quadratico medio, è più di dieci volte più piccolo dello scarto medio
+rispetto a ERA5.
+
+Lo scarto sulla terra va nel verso opposto a quello che suggeriscono radiazione e nubi. Più
+radiazione solare al suolo e meno nubi portano energia alla superficie, e la superficie è più fredda,
+soprattutto alle 12 UTC, quando l'eccesso di radiazione solare è massimo. La ripartizione
+dell'energia in superficie resta quindi non spiegata. Per chiarirla servirebbe
+il bilancio energetico di superficie, e i tre campi che lo chiudono, i flussi di calore sensibile e
+latente e il flusso di calore nel suolo, non sono nell'archivio (\cref{cap:limiti}). Senza questi
+campi non si separano quattro cause possibili: lo schema di superficie può mandare più energia in
+calore latente, il clima dell'umidità del suolo può essere diverso da quello di ERA5, l'orografia
+risolta a \SI{3}{km} alza la quota media di una cella aggregata sulla griglia ERA5, oppure lo scarto è
+un errore del modello. Chi confronta \campo{skt} con temperature di superficie da satellite, o ne
+corregge lo scarto, deve usare lo scarto misurato e non una stima ricavata da radiazione e nubi.
+
+\section{Rugosità, velocità d'attrito e sforzo}
+\label{sec:rugosita}
+
+La rugosità \campo{fsr} è la rugosità locale \campo{ZNT} di WRF: un valore di tabella per categoria
+dominante, sostituito sotto la neve. Vale \SI{0.70}{m} per le foreste, \SI{0.15}{m} per
+savane e prati, \SI{0.065}{m} per il suolo nudo, \SI{1.00}{m} sui \num{19867} punti urbani, e scende
+a \SI{0.011}{m} dove la neve copre la superficie. La rugosità di ERA5 è invece una rugosità efficace,
+che contiene la resistenza orografica che l'IFS parametrizza a \SI{31}{km}; a \SI{3}{km} l'orografia
+è risolta. Sul mare le due rugosità seguono entrambe la formula di Charnock. Sulla terra differiscono di un
+fattore da due a tre (\cref{tab:rugosita}), e un coefficiente di resistenza calcolato dalla
+\campo{fsr} dell'archivio differisce da uno calcolato da quella di ERA5 per la sola definizione della
+rugosità \parencite{issue56}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Rugosità e velocità d'attrito: intervallo delle medie per istante su sei istanti
+  distribuiti sulle stagioni, e rapporti con ERA5.}
+  \label{tab:rugosita}
+  \begin{tabularx}{\textwidth}{@{}lXXXX@{}}
+    \toprule
+    Campo & CHAPTER & ERA5 & Rapporto delle medie & Rapporto delle mediane \\
+    \midrule
+    \campo{fsr}, terra  & \SIrange{0.188}{0.217}{m}   & \SIrange{0.375}{0.394}{m}   & \numrange{0.48}{0.55} & \numrange{0.32}{0.48} \\
+    \campo{fsr}, mare   & \SIrange{0.0089}{0.0091}{m} & \SIrange{0.0103}{0.0105}{m} & \numrange{0.85}{0.88} & \numrange{1.5}{1.9} \\
+    \campo{zust}, terra & \SIrange{0.44}{0.52}{m/s}   & \SIrange{0.23}{0.28}{m/s}   & \numrange{1.62}{2.06} & \\
+    \campo{zust}, mare  & \SIrange{0.21}{0.34}{m/s}   & \SIrange{0.19}{0.31}{m/s}   & \numrange{1.08}{1.12} & \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+La velocità d'attrito \campo{zust} è quella del modello. Il rapporto delle medie con ERA5 è fra
+\num{1.62} e \num{2.06} sulla terra e fra \num{1.08} e \num{1.12} sul mare, dove la correlazione è
+fra \num{0.85} e \num{0.90}. Una rugosità fra \num{0.32} e \num{0.55} volte quella di ERA5, insieme a
+una velocità d'attrito fra \num{1.62} e \num{2.06} volte, esclude un semplice errore di scala sulla
+stessa rugosità. A \SI{3}{km} il vento forzato dal terreno è risolto, e la velocità d'attrito del
+modello lo segue.
+
+Le componenti dello sforzo in superficie \campo{iews} e \campo{inss}, in \si{N/m^2}, sono il modulo
+$\rho u_*^2$, con $\rho$ la densità dell'aria e $u_*$ la velocità d'attrito del modello, proiettato
+sulla direzione del vento a \SI{10}{m}. L'allineamento con il vento a \SI{10}{m} è l'unica ipotesi.
+Con $\tau$ il vettore di componenti \campo{iews} e \campo{inss}, le identità $|\tau| = \rho u_*^2$ e
+$u_* = \sqrt{|\tau|/\rho}$ valgono entro \SI{1.8e-6}{N/m^2} ed entro \SI{2.7e-4}{m/s} in ogni punto
+di sei istanti.

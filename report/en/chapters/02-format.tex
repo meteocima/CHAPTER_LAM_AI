@@ -1,0 +1,134 @@
+\chapter{The archive format}
+\label{cap:formato}
+
+\section{Files and messages}
+\label{sec:file}
+
+The archive consists of one GRIB2 file per validity time. Every hourly file contains 90 variables
+in 246 GRIB messages, always the same ones. The list comes from a single registry in the
+converter, and every file produced is checked against that list, so a field that could not be
+computed does not go unnoticed. File names follow the pattern
+\begin{center}
+\campo{ailam-an-cima-3km-{year}-{year}-1h-v1-{YYYYMMDD}{HH}.grib},
+\end{center}
+\noindent in which the year appears twice with the same value and the final part is the validity
+time.
+
+The messages use grid definition template 3.10 (Mercator), originating centre \campo{ecmf} and
+\campo{grid_ccsds} packing at 24 bits per value. Every parameter carries the ECMWF paramId and
+shortName \parencite{paramdb}. There are 89 distinct shortNames for 90 variables, because
+\campo{z} appears twice, as geopotential on the pressure levels and as surface geopotential,
+i.e.\ the orography. Fields defined only over part of the domain carry a GRIB bitmap, and points
+outside the domain of definition are missing points, not zeros (\cref{sec:mascheratura}).
+
+An hourly file is \SI{737}{MB} on average over the 184 files of September 2024, and
+\SI{661}{MB} over the 8 files at 00 UTC among them; over the 476 files of February and March 2024
+the mean is \SI{765}{MB}. This gives between \SI{17.7}{GB} and \SI{18.4}{GB} per day and between
+\SI{6.5}{TB} and \SI{6.7}{TB} per year.
+
+\section{Geometry}
+\label{sec:geometria}
+
+The grid declares the shape of the Earth with \campo{shapeOfTheEarth=1} and radius
+\SI{6370000}{m}, the model sphere (\cref{sec:dominio}). With this declaration the coordinates that
+eccodes reconstructs from the grid definition coincide with those of the model to within
+\SI{2.009}{m} over the whole domain. Without it, the grid reconstructed by eccodes is displaced by
+up to about \SI{1.1}{km} at the northern edge.
+
+\section{Vertical levels}
+\label{sec:livelli}
+
+The 13 three-dimensional variables are on the same 13 pressure levels,
+\SIlist{1000;925;850;700;600;500;400;300;250;200;150;100;50}{\hPa}. These are the levels
+requested by the LAM AI project, a subset of the 37 pressure levels of ERA5 \parencite{era5doc}.
+Of the others, the 8 above \SI{50}{\hPa} lie above the model top and cannot be produced.
+
+The 246 messages are distributed over the level types of \cref{tab:tipi-livello}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Level types of the 246 messages of an hourly file.}
+  \label{tab:tipi-livello}
+  \begin{tabularx}{\textwidth}{@{}lrX@{}}
+    \toprule
+    Level type & Messages & Content \\
+    \midrule
+    \campo{isobaricInhPa}      & 169 & 13 variables on 13 pressure levels \\
+    \campo{heightAboveGround}  & 11  & wind at 10, 100 and \SI{200}{m}; temperature, dew-point temperature and relative humidity at \SI{2}{m}; \campo{10fg}; \campo{vwsh} \\
+    \campo{surface}            & 47  & static fields, soil, snow, precipitation, runoff and surface radiation \\
+    \campo{entireAtmosphere}   & 10  & column integrals and cloud covers \\
+    \campo{nominalTop}         & 5   & radiation at the top of the atmosphere \\
+    \campo{mostUnstableParcel} & 2   & \campo{mucape}, \campo{mucin} \\
+    \campo{meanSea}            & 1   & \campo{msl} \\
+    \campo{entireLake}         & 1   & \campo{dl} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Time convention}
+\label{sec:tempo}
+
+Instantaneous fields use product definition template 4.0, and their reference time
+(\campo{dataDate}, \campo{dataTime}) coincides with the validity time. The 19 accumulated fields
+are total precipitation (\campo{tp}), rain (\campo{tirf}), snowfall (\campo{sf}), the
+three runoffs (\campo{sro}, \campo{ssro}, \campo{ro}) and the 13 radiative fluxes at the surface
+and at the top of the atmosphere. They use template 4.8, because the ECMWF definitions of these
+parameters require the key \campo{typeOfStatisticalProcessing}, which does not exist in template
+4.0 \parencite{eccodes}. As in ERA5 \parencite{era5doc}, every accumulated field covers the hour
+ending at the validity time $H$; in the archive the reference time is $H-1$ and the accumulation
+interval (\campo{stepRange}) is 0--1. The value is the difference between two consecutive hours of the same
+run, for example $\campo{tp}(H) = [\campo{RAINNC}(H) - \campo{RAINNC}(H-1)]/1000$, with
+\campo{RAINNC} in \si{mm} and \campo{tp} in \si{m} \parencite{issue70}. The twentieth field with
+template 4.8 is \campo{10fg}, the maximum of the \SI{10}{m} wind, with reference time $H-1$,
+declared interval 0--1 and \campo{stepType=max} (\cref{cap:raffica}).
+
+The hourly file at 00 UTC of day D comes entirely, accumulated fields included, from the thirtieth
+hour of the run started at 18 UTC on D$-2$; the accumulated fields are the difference between its
+thirtieth and twenty-ninth hours \parencite{issue71,issue72}. The accumulated fields of the hourly
+file at 01 UTC of D are the difference between the seventh and sixth hours of the run started at
+18 UTC on D$-1$. The 24 validity times from 01 UTC of D to 00 UTC of D$+1$ all come from that run,
+and the sum of their accumulated fields is the run's total from its sixth to its thirtieth hour.
+When the wrfout file of a run's thirtieth hour is missing at the source, every message of the
+following hourly file at 00 UTC consists of missing points; as of 14 October 2026 this happens in no
+hourly file of the archive.
+
+Since instantaneous fields have reference time $H$ and fields with template 4.8 have $H-1$, an
+hourly file contains two reference times, and an index of the hourly files must be built on the
+validity time (\campo{validityDate}, \campo{validityTime}), never on the reference time.
+Telling an accumulated field from an instantaneous one requires \campo{stepType} (or
+\campo{typeOfStatisticalProcessing}) and \campo{stepRange}. The key
+\campo{generatingProcessIdentifier} is 128, the eccodes default for GRIB2, in all 246 messages,
+and does not separate accumulated fields from instantaneous ones \parencite{issue53}.
+
+\section{The run switch}
+\label{sec:cambio-run}
+
+The \emph{run switch} is the step, once a day, between the 00 UTC validity time of D, thirtieth hour
+of the run started at 18 UTC on D$-2$, and the 01 UTC validity time of D, seventh hour of the run
+started at 18 UTC on D$-1$. The jump between the two validity times is the difference between the
+two runs at 00 UTC of D, thirtieth hour of the first and sixth of the second, plus the change over
+the hour 00--01 UTC in the second. \Cref{tab:cambio-run} compares it with
+one hour of change within the same run, over the full domain, at a single run switch, from 23 UTC on
+18 January to 01 UTC on 19 January 2024 \parencite{issue72}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Root-mean-square difference between two consecutive validity times, over the full
+  domain, 18 and 19 January 2024.}
+  \label{tab:cambio-run}
+  \begin{tabular}{@{}lSSSSS@{}}
+    \toprule
+    Validity times & {\campo{2t} (\si{K})} & {\campo{sp} (\si{\hPa})} & {\SI{10}{m} wind speed (\si{m/s})} & {\campo{t} at \SI{850}{\hPa} (\si{K})} & {\campo{tcwv} (\si{kg/m^2})} \\
+    \midrule
+    23--00 UTC, same run & 0.66 & 0.50 & 1.13 & 0.48 & 0.89 \\
+    00--01 UTC, run switch & 1.79 & 1.62 & 1.62 & 0.94 & 1.54 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+On 19 January 2024 the root-mean-square difference of \campo{2t} at the run switch is \num{2.7}
+times that of one hour within the same run, and the maximum absolute difference between the two
+validity times is \SI{11.0}{K}, against \SI{9.1}{K} between 23 and 00 UTC. A tendency or a time derivative computed across the interval from 00 to 01 UTC
+contains this jump.
