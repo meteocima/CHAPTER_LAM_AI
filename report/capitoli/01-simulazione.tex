@@ -1,9 +1,11 @@
 \chapter{La simulazione}
 \label{cap:simulazione}
 
-CHAPTER è una rianalisi regionale prodotta con il modello WRF, versione 4.1.1
-\parencite{wrf411}. L'archivio GRIB2 CHAPTER contiene i file wrfout orari della simulazione
-convertiti in GRIB2, con i nomi e i codici dei parametri ECMWF.
+CHAPTER è un downscaling dinamico a convezione esplicita di ERA5 sull'Europa e sul bacino del
+Mediterraneo \parencite{bernini2025}, prodotto con il modello WRF (Weather Research and
+Forecasting), versione 4.1.1 \parencite{wrf411}. L'archivio GRIB2 CHAPTER è l'insieme dei file
+orari GRIB2 ricavati dai file wrfout della simulazione, uno per istante di validità, con i nomi
+(\campo{shortName}) e i codici (\campo{paramId}) dei parametri ECMWF (\cref{cap:formato}).
 
 \section{Dominio, griglia e periodo}
 \label{sec:dominio}

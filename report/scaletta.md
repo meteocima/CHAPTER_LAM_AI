@@ -1,7 +1,7 @@
 # Scaletta del report
 
-Titolo di lavoro: *L'archivio GRIB2 della rianalisi CHAPTER a 3 km: contenuto e corrispondenza con
-lo schema ERA5*.
+Titolo di lavoro: *L'archivio GRIB2 CHAPTER. Downscaling dinamico a 3 km di ERA5. Contenuto e
+corrispondenza con lo schema ERA5*.
 
 Fonti di questa scaletta: le tre schede (`schede/CHAPTER_VARIABLES.md` = **CV**,
 `schede/MISSING_VARIABLES.md` = **MV**, `schede/CHAPTER_KNOWN_PROPERTIES.md` = **KP**) e gli esiti
@@ -388,6 +388,7 @@ chiuse come proposto: valori orari di `zust` esclusi, deflusso con i soli valori
 
 | termine | forma fissata nel report | definizione |
 |---|---|---|
+| CHAPTER | downscaling dinamico a convezione esplicita di ERA5 (EN: convection-permitting dynamical downscaling of ERA5), mai "rianalisi" | il prodotto di WRF descritto da Bernini et al. 2025 |
 | archivio | archivio GRIB2 CHAPTER | l'insieme dei file orari GRIB2 a 246 messaggi |
 | file orario | file orario | un file GRIB2 per istante di validità |
 | messaggio | messaggio GRIB | un campo su un livello |
