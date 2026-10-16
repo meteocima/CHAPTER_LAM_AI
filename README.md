@@ -1,9 +1,10 @@
 <div align="center">
 
-# CHAPTER
+# CHAPTER_LAM_AI
 
-**From the 3 km CHAPTER downscaling of ERA5 over Europe and the Mediterranean to an ECMWF-compatible GRIB2 archive and an Anemoi training dataset.**
+**CHAPTER for the LAM AI project: the 3 km WRF output fetched from LRZ to Leonardo and turned into an ECMWF-compatible GRIB2 archive and Anemoi training datasets.**
 
+[![Project LAM AI](https://img.shields.io/badge/project-LAM%20AI-c0392b)](#chapter_lam_ai)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/managed%20with-uv-DE5FE9)](https://docs.astral.sh/uv/)
 [![Fortran F2PY](https://img.shields.io/badge/kernels-Fortran%20%2B%20F2PY-734F96?logo=fortran&logoColor=white)](fortran/)
@@ -14,13 +15,15 @@
 [![Data internal use](https://img.shields.io/badge/data-internal%20use-lightgrey)](#data-access-and-citation)
 [![Paper QJRMS](https://img.shields.io/badge/paper-10.1002%2Fqj.5014-blue)](https://doi.org/10.1002/qj.5014)
 
-[Quick start](#quick-start) | [Variables](CHAPTER_VARIABLES.md) | [Known properties](CHAPTER_KNOWN_PROPERTIES.md) | [HPC pipeline](#hpc-pipeline) | [Manual (PDF)](report/en/main.pdf) | [Issues](https://github.com/meteocima/CHAPTER/issues)
+[Quick start](#quick-start) | [Variables](CHAPTER_VARIABLES.md) | [Known properties](CHAPTER_KNOWN_PROPERTIES.md) | [HPC pipeline](#hpc-pipeline) | [Manual (PDF)](report/en/main.pdf) | [Issues](https://github.com/meteocima/CHAPTER_LAM_AI/issues)
 
 <img src="chapter_domain.png" alt="Map of the CHAPTER WRF domain d02: Europe and the Mediterranean basin on a Mercator projection, 1353 by 1641 points at 3 km" width="640">
 
 </div>
 
-CHAPTER (*Computational Hydrometeorology with Advanced Performance to Enhanced Realism*) is a convection-permitting dynamical downscaling of ERA5 over Europe and the Mediterranean basin, produced with WRF at 3 km ([Bernini et al., 2025](https://doi.org/10.1002/qj.5014)). This repository does not run the model. It converts the hourly `wrfout` files into a GRIB2 archive with ECMWF paramIds on 13 pressure levels, and from there into an [Anemoi](https://anemoi.readthedocs.io/) Zarr dataset for machine learning.
+CHAPTER (*Computational Hydrometeorology with Advanced Performance to Enhanced Realism*) is a convection-permitting dynamical downscaling of ERA5 over Europe and the Mediterranean basin, produced with WRF at 3 km ([Bernini et al., 2025](https://doi.org/10.1002/qj.5014)). Its hourly `wrfout` files are archived at LRZ (Leibniz Supercomputing Centre).
+
+This repository is specific to the **LAM AI** project. It does not run the model: it fetches the CHAPTER `wrfout` from LRZ to Leonardo, the CINECA supercomputer, converts them into a GRIB2 archive with ECMWF paramIds on 13 pressure levels, and builds from it the [Anemoi](https://anemoi.readthedocs.io/) Zarr datasets LAM AI trains on. The variable set, the ERA5 conventions and the Leonardo pipeline are all chosen for that use.
 
 > [!TIP]
 > If you use the archive rather than build it, start from [CHAPTER_VARIABLES.md](CHAPTER_VARIABLES.md), which says what each field is, and [CHAPTER_KNOWN_PROPERTIES.md](CHAPTER_KNOWN_PROPERTIES.md), which lists what is correct but surprising, with the measured numbers. Both are also available as PDF.
@@ -90,8 +93,8 @@ The conversion has two steps. A customised wrf-python 1.4.2 (`src/wrf/` and the 
 You need Python 3.10 or later, [uv](https://docs.astral.sh/uv/), gcc and gfortran (OpenMP optional) and the ecCodes C library.
 
 ```bash
-git clone https://github.com/meteocima/CHAPTER.git
-cd CHAPTER
+git clone https://github.com/meteocima/CHAPTER_LAM_AI.git
+cd CHAPTER_LAM_AI
 uv sync                      # builds the _wrffortran extension through scikit-build-core and CMake
 uv sync --project anemoi     # the Anemoi step, in its own environment (anemoi-datasets 0.5.45)
 ```
@@ -114,7 +117,7 @@ uv run python convert_to_pressure_levels.py --input <wrfout> --output <grib> --d
 | `--accum-snap-dir` | accumulator snapshots: the state of the hour before must be here, or its wrfout beside the input |
 | `--debug-vars` | compute only some fields; plain 2D native fields skip the 3D cache and take about 15 s |
 
-**Input of a 00Z.** The 00Z of day D is the 24 h file of the run for D-1 (`wrfout_d02_<D>_00:00:00` in the `(D-2)18` folder), and the hour before is that run's 23Z. The converter refuses the 00Z of the run for D, which is still in spin-up ([#72](https://github.com/meteocima/CHAPTER/issues/72)).
+**Input of a 00Z.** The 00Z of day D is the 24 h file of the run for D-1 (`wrfout_d02_<D>_00:00:00` in the `(D-2)18` folder), and the hour before is that run's 23Z. The converter refuses the 00Z of the run for D, which is still in spin-up ([#72](https://github.com/meteocima/CHAPTER_LAM_AI/issues/72)).
 
 Output files are named `ailam-an-cima-3km-<year>-<year>-1h-v1-<YYYYMMDDHH>.grib`.
 
@@ -146,7 +149,7 @@ What the converter adds to WRF:
 
 ## HPC pipeline
 
-The `wrfout` files are stored at LRZ (Leibniz Supercomputing Centre); the archive is built on Leonardo, the CINECA supercomputer. Files travel through the CINECA datamover (`data.leonardo.cineca.it`) and the LRZ data relay, so the data do not pass through the login node.
+The `wrfout` files are stored at LRZ; the archive is built on Leonardo. Files travel through the CINECA datamover (`data.leonardo.cineca.it`) and the LRZ data relay, so the data do not pass through the login node.
 
 ```mermaid
 flowchart LR
@@ -171,7 +174,7 @@ Convert jobs are submitted with SLURM to `dcgp_usr_prod`, Leonardo's Data Centri
 | Setting | Value | Why |
 |---|---|---|
 | `pipeline.direction` | `backward` | newest hours first |
-| `batch.fetch_parallel` | 6 | the measured knee of the relay, about 360 MB/s; more streams add no bandwidth ([#69](https://github.com/meteocima/CHAPTER/issues/69)) |
+| `batch.fetch_parallel` | 6 | the measured knee of the relay, about 360 MB/s; more streams add no bandwidth ([#69](https://github.com/meteocima/CHAPTER_LAM_AI/issues/69)) |
 | `batch.max_queued_converts` | 48 | CINECA cancels and warns on hundreds of queued jobs |
 | `slurm.step_convert_account` | `<account>` | the partition bills per core, so one core per timestep |
 
@@ -187,7 +190,7 @@ Every outcome is appended to a status ledger (`FETCH_OK`, `CONVERT_SUBMITTED`, `
 - [`hpc/run_share_conversion.sh`](hpc/run_share_conversion.sh) converts every `wrfout` already on local disk.
 - `pipeline.download_only=true` fetches and stops: nothing is converted or deleted. Give it its own `paths.wrfout_dir`, `paths.status_log`, `paths.driver_log` and `paths.stop_flag`.
 - Configuration lives in [`conf/pipeline.yaml`](conf/pipeline.yaml) (Hydra, every key can be overridden on the command line); the mapping from date to run folder is in [`hpc/dates.py`](hpc/dates.py).
-- The day pipeline ([`hpc/submit_pipeline.py`](hpc/submit_pipeline.py), `fetch_day.sh`, `convert_day.sh`) is retired: it does not fetch the 24 h file a 00Z needs ([#71](https://github.com/meteocima/CHAPTER/issues/71)).
+- The day pipeline ([`hpc/submit_pipeline.py`](hpc/submit_pipeline.py), `fetch_day.sh`, `convert_day.sh`) is retired: it does not fetch the 24 h file a 00Z needs ([#71](https://github.com/meteocima/CHAPTER_LAM_AI/issues/71)).
 
 </details>
 
@@ -209,7 +212,7 @@ Not in the archive: turbulent kinetic energy (TKE), planetary boundary layer (PB
 | Instantaneous | product definition template 0 | the valid time |
 | Accumulated, and `10fg` | product definition template 8, step `0-1` | H-1 (at 00Z, 23Z of the day before) |
 
-Each WRF run starts at 18Z of the day before and lasts 30 hours; its first six hours are spin-up and are not published. Every file is one state of one run: the 00Z of day D is the last hour of the run for D-1 (lead 30), and 01Z comes from the run for D (lead 7). The archive therefore switches run once a day, between 00Z and 01Z ([#72](https://github.com/meteocima/CHAPTER/issues/72)).
+Each WRF run starts at 18Z of the day before and lasts 30 hours; its first six hours are spin-up and are not published. Every file is one state of one run: the 00Z of day D is the last hour of the run for D-1 (lead 30), and 01Z comes from the run for D (lead 7). The archive therefore switches run once a day, between 00Z and 01Z ([#72](https://github.com/meteocima/CHAPTER_LAM_AI/issues/72)).
 
 > [!IMPORTANT]
 > Index the archive on validity time, not on `dataTime`, and do not use `generatingProcessIdentifier`: it is 128 on every message.
@@ -284,13 +287,13 @@ report/                         LaTeX manual, Italian (report/) and English (rep
 | [CONTEXT.md](CONTEXT.md) | glossary of the terms used across the repository |
 | [CLAUDE.md](CLAUDE.md) | developer notes: architecture, HPC pitfalls, the reasoning behind each choice |
 | [meteoswiss_variable_comparison.md](meteoswiss_variable_comparison.md) | the original comparison with the MeteoSwiss and COSMO training lists |
-| [Issues](https://github.com/meteocima/CHAPTER/issues) | work in progress and diagnoses |
+| [Issues](https://github.com/meteocima/CHAPTER_LAM_AI/issues) | work in progress and diagnoses |
 
 References: [ECMWF Parameter Database](https://codes.ecmwf.int/grib/param-db/), [ecCodes](https://confluence.ecmwf.int/display/ECC/ecCodes+Home), [anemoi-datasets](https://anemoi.readthedocs.io/projects/datasets/) and its [recipes](https://anemoi.readthedocs.io/projects/datasets/en/latest/howtos/create/), [wrf-python](https://wrf-python.readthedocs.io/).
 
 ## Data access and citation
 
-The GRIB2 archive and the Anemoi datasets built from it are for the project's internal use and are not distributed. This repository holds the conversion code only.
+The GRIB2 archive and the Anemoi datasets built from it are for the internal use of the LAM AI project and are not distributed. This repository holds the conversion code only.
 
 To cite CHAPTER:
 
@@ -298,6 +301,6 @@ To cite CHAPTER:
 
 ## Contact and licence
 
-**Contact:** Luca Monaco, Fondazione CIMA (CIMA Research Foundation). Report errors and requests in the [issues](https://github.com/meteocima/CHAPTER/issues).
+**Contact:** Luca Monaco, Fondazione CIMA (CIMA Research Foundation). Report errors and requests in the [issues](https://github.com/meteocima/CHAPTER_LAM_AI/issues).
 
 **Licence:** the code is distributed under the [Apache License 2.0](LICENSE). `src/wrf/` and `fortran/` derive from [wrf-python](https://github.com/NCAR/wrf-python), also under the Apache License 2.0, as recorded in [NOTICE](NOTICE). The CHAPTER data are for internal use and are not covered by this licence.
