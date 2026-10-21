@@ -43,9 +43,9 @@
 # skips staged wrfout (download) and existing GRIBs (convert).
 # Stop: touch ${W}/logs/rebuild_sequence.stop  (plus the per-chain
 # rebuild_<label>_{dl,cv}.stop to stop a driver itself).
-# Resume after a stop: PHASES_ONLY="<labels>" is REQUIRED for phases whose wrfout were
-# already deleted -- the download side keys on the staged file, so they would otherwise
-# be fetched again in full.
+# Resume after a stop: PHASES_ONLY="<labels>" restricts the run to the phases still to
+# do. Since 2026-10-21 the download side also skips an hour whose GRIB exists, so a
+# finished phase is no longer fetched again in full; PHASES_ONLY spares walking it.
 
 set -uo pipefail
 

@@ -176,12 +176,18 @@ grib_path() {
 }
 
 # Is this timestep already done, and with which ledger tag? Prints the tag and
-# returns 0 when it can be skipped. In download-only mode the GRIB never exists, so
-# re-entrancy has to key on the staged wrfout instead -- and on its SIZE, or a
-# truncated leftover would be mistaken for a finished download.
+# returns 0 when it can be skipped. In download-only mode re-entrancy keys on the
+# staged wrfout -- and on its SIZE, or a truncated leftover would be mistaken for a
+# finished download -- but an hour converted already is done too, unless the next
+# hour still has to be differenced against its state. Keying on the wrfout alone
+# re-fetched every converted hour of a relaunched month, which the convert chain then
+# skipped on the GRIB and never deleted: ~12 TB after the relay outage of 2026-10-19.
 already_done() {
     local d="$1" h="$2" raw
     if [ "${DOWNLOAD_ONLY}" = "1" ]; then
+        if [ -f "$(grib_path "$d" "$h")" ] && ! next_needs_snapshot "$d" "$h"; then
+            echo "SKIP_GRIB_EXISTS"; return 0
+        fi
         raw="${WRFOUT_DIR}/${d}/wrfout_d02_${d}_${h}:00:00"
         # A 00Z staged before #72 is the spin-up one, not the archived state.
         [ "$h" = "00" ] && evict_spinup_00z "$d"
@@ -580,7 +586,6 @@ snapshot_only() {
 # after 00Z: 01Z is differenced against the spin-up 00Z, fetched with 01Z (#72).
 next_needs_snapshot() {
     local d="$1" h="$2" nd nh
-    [ "${DOWNLOAD_ONLY}" = "1" ] && return 1
     [ "$h" = "00" ] && return 1
     read -r nd nh <<< "$(next_hour "$d" "$h")"
     within_window "$(epoch_of "$nd" "$nh")" || return 1

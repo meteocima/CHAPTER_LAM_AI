@@ -30,7 +30,8 @@ from omegaconf import DictConfig, OmegaConf
 # Add project root to path for consistency with submit_pipeline.py
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hpc import ledger  # noqa: E402  (needs the path insert above)
+import accum_hourly  # noqa: E402  (needs the path insert above)
+from hpc import ledger  # noqa: E402
 
 # Width of the report's state column. Derived from the ledger vocabulary, because
 # the longest state is "RECALL:<longest problem token>" and hardcoding it means
@@ -81,15 +82,18 @@ MIN_WRFOUT_BYTES = 1073741824  # 1 GiB
 
 
 def do_report(start_dt, end_dt, direction, grib_dir, grib_template, status_log,
-              download_only=False, wrfout_dir=None, min_bytes=MIN_WRFOUT_BYTES):
+              download_only=False, wrfout_dir=None, min_bytes=MIN_WRFOUT_BYTES,
+              accum_snap_dir=None):
     """Read-only consolidated status: per-timestep DONE / MISSING / RECALL.
 
     Cross-references the produced artefacts with the driver status ledger so it is
     easy to see which timesteps still need a tape recall on LRZ.
 
-    In download-only mode there is no GRIB, so the artefact is the staged wrfout --
-    and it is checked by SIZE, not mere existence: with no convert downstream, that
-    size gate is the only thing separating an intact delivery from a truncated one.
+    In download-only mode the artefact is the staged wrfout -- checked by SIZE, not
+    mere existence: with no convert downstream, that size gate is the only thing
+    separating an intact delivery from a truncated one -- unless the hour is
+    converted already and its wrfout no longer needed (accum_hourly.wrfout_may_go,
+    the rule the driver skips on too).
 
     Returns (done, pending, recall). The caller needs the counts, not just the
     printout: a sequence script used to re-read the summary line it had just been
@@ -112,18 +116,26 @@ def do_report(start_dt, end_dt, direction, grib_dir, grib_template, status_log,
     summary = ledger.classify(lines)
     problems = summary.problems
 
+    def grib_of(dt):
+        return os.path.join(grib_dir, f"{dt.year:04d}", f"{dt.month:02d}",
+                            grib_name(grib_template, dt))
+
     def produced(dt):
-        """(exists, path) for the artefact this mode is supposed to produce."""
-        if download_only:
-            p = os.path.join(wrfout_dir, dt.strftime("%Y-%m-%d"),
-                             f"wrfout_d02_{dt:%Y-%m-%d}_{dt:%H}:00:00")
+        """(exists, path) for the artefact this mode is supposed to produce.
+
+        In download-only mode an hour converted already is done too, unless the
+        next hour still needs its state: the driver skips it, so it is no hole.
+        """
+        grib = grib_of(dt)
+        if download_only and not (os.path.exists(grib) and
+                                  accum_hourly.wrfout_may_go(dt, accum_snap_dir, grib_of)):
+            raw = os.path.join(wrfout_dir, dt.strftime("%Y-%m-%d"),
+                               f"wrfout_d02_{dt:%Y-%m-%d}_{dt:%H}:00:00")
             try:
-                return os.path.getsize(p) >= min_bytes, p
+                return os.path.getsize(raw) >= min_bytes, raw
             except OSError:
-                return False, p
-        p = os.path.join(grib_dir, f"{dt.year:04d}", f"{dt.month:02d}",
-                         grib_name(grib_template, dt))
-        return os.path.exists(p), p
+                return False, raw
+        return os.path.exists(grib), grib
 
     missing_label = "RAW_MISSING" if download_only else "GRIB_MISSING"
     done = missing = recall = 0
@@ -212,7 +224,8 @@ def app(cfg: DictConfig):
     if report:
         _done, pending, _recall = do_report(
             start_dt, end_dt, direction, grib_dir, grib_template, status_log,
-            download_only=download_only, wrfout_dir=wrfout_dir)
+            download_only=download_only, wrfout_dir=wrfout_dir,
+            accum_snap_dir=accum_snap_dir)
         if pending:
             sys.exit(1)
         return

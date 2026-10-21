@@ -123,3 +123,35 @@ def test_report_exits_zero_when_the_window_is_complete(tmp_path):
     p = run_cli(tmp_path, [("2019-09-07", h) for h in ("00", "01", "02", "03")])
     assert "4 done, 0 pending" in p.stdout
     assert p.returncode == 0
+
+
+
+def staging_report(tmp_path, converted, snapshots=()):
+    """Download-only report over 2019-09-07T00..03 with `converted` hours (HH) and
+    the accumulator snapshots of `snapshots` (HH, state of the run for that day)."""
+    grib_dir = tmp_path / "grib"
+    make_gribs(grib_dir, [("2019-09-07", hh) for hh in converted])
+    snap_dir = tmp_path / "accum_snap"
+    for hh in snapshots:
+        p = snap_dir / "2019" / "09" / f"accum_20190907{hh}_run2019090618.npz"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("x")
+    log = tmp_path / "status.log"
+    log.write_text("")
+    return ssp.do_report(
+        "2019-09-07T00", "2019-09-07T03", "backward", str(grib_dir), TEMPLATE,
+        str(log), download_only=True, wrfout_dir=str(tmp_path / "wrfout"),
+        accum_snap_dir=str(snap_dir))
+
+
+def test_download_only_counts_a_converted_hour_as_done(tmp_path):
+    # The download-only chain skips an hour already converted (its wrfout is gone,
+    # deleted by convert_step.sh): the staging report must not call it missing.
+    # 00Z serves no later hour; 01Z serves 02Z, and its state is saved.
+    assert staging_report(tmp_path, ["00", "01"], snapshots=["01"]) == (2, 2, 0)
+
+
+def test_download_only_keeps_a_converted_hour_whose_state_is_still_needed(tmp_path):
+    # 01Z converted, its snapshot gone, 02Z not converted: the driver still has to
+    # stage 01Z for the hour 01->02, so the report must not hide it as done.
+    assert staging_report(tmp_path, ["00", "01"]) == (1, 3, 0)
