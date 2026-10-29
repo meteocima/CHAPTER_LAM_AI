@@ -76,7 +76,7 @@ The converter needs the hour before the input as well, because every accumulatio
 | Time step | hourly; every accumulation covers the hour ending at its timestep, as in ERA5 |
 | Schema | 90 variables, 246 GRIB2 messages per timestep (13 × 13 on pressure levels, 77 single-level) |
 | Size | about 747 MB per timestep, 17.9 GB per day, 6.55 TB per year (`grid_ccsds` packing) |
-| Archive (as of 2026-10-16) | 2019, 2024 and 2025 up to 2025-07-02T23 complete; 2020 to 2023 in production |
+| Archive (as of 2026-10-16) | 2019, 2024 and 2025 up to 2025-07-02T23 complete; 2020 to 2023 in production; 2018 being recalled from tape on LRZ (since 2026-10-29) |
 
 ## What it does
 
