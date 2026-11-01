@@ -110,11 +110,14 @@ COLD_COPY_DIR="${COLD_COPY_DIR:-${W}/cold_copy}"
 # cold-copy-day of the CHAPTER_INHOUSE clone pinned to a tag (ingest-2018-v2), its venv
 # built once without the dev group: never the development checkout, which is live code.
 COLD_COPY_DAY="${COLD_COPY_DAY:-${W}/cold_copy_src/cold_copy/.venv/bin/cold-copy-day}"
-# One day of the Cold Copy on one core (DCGP bills per core). 64G and 8 h are NOT
-# measured: the trial measures them (/usr/bin/time -v in each task's output), and
-# these two lines take its figures before the year is launched.
+# One day of the Cold Copy on one core (DCGP bills per core, RAM is free). Memory,
+# measured: 64G was killed on all four days of the trial (OUT_OF_MEMORY, MaxRSS 66.9 GB,
+# 2026-11-01), on the first 3D variable; one 3D variable over 24 Valid Times alone
+# peaks at 70.5 GB (74.1 GB MaxRSS), the float64 copies of the Ingest's 16-bit packing
+# (job 63155174, synthetic 24x49x1641x1353). PH and W have 50 levels, so 128G leaves
+# ~50% above it. The time is not measured yet: the trial's rerun sets it.
 CC_ACCOUNT="${CC_ACCOUNT:-aifpt_ailamit_0}"
-CC_MEM="${CC_MEM:-64G}"
+CC_MEM="${CC_MEM:-128G}"
 CC_TIME="${CC_TIME:-08:00:00}"
 PHASES_SPEC="${PHASES_SPEC:-}"
 export KEEP_WRFOUT PHASES_ONLY FETCH_PARALLEL COLD_COPY COLD_COPY_DIR COLD_COPY_DAY CC_ACCOUNT CC_MEM \
