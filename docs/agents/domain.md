@@ -38,7 +38,8 @@ If your output contradicts an existing ADR, surface it explicitly rather than si
 
 ## Note for this repo
 
-Neither `CONTEXT.md` nor `docs/adr/` exists yet. Much of what would go in them currently
-lives in `CLAUDE.md` (the GRIB2 variable schema, the measured `skt` emissivity, the refuted
-hypotheses, the HPC gotchas) and in `MISSING_VARIABLES.md`. When `/domain-modeling` does
-create a `CONTEXT.md`, it should point at those rather than restate them.
+Much of what would go in `CONTEXT.md` lives in `CLAUDE.md` (the GRIB2 variable schema, the
+measured `skt` emissivity, the refuted hypotheses, the HPC gotchas) and in
+`MISSING_VARIABLES.md`; `CONTEXT.md` points at those rather than restating them. The Cold
+Copy's terms belong to `meteocima/CHAPTER_INHOUSE`'s `CONTEXT.md`, which `CONTEXT.md` here
+borrows from.

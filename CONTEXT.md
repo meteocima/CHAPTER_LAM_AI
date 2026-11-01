@@ -28,7 +28,8 @@ The GRIB2 output of the conversion, one file per timestep. The archive is a rend
 CHAPTER, not CHAPTER itself.
 
 **Run**:
-One WRF simulation: a single initialisation plus its 6 h spinup, covering 24 h of output.
+One WRF simulation, initialised at 18Z and lasting 30 h: its 6 h spinup, then the 24 h it
+gives the archive, 01Z of its day to 00Z of the next.
 _Avoid_: simulation. For an execution of the pipeline say execution or re-run, never run.
 
 **Run folder**:
@@ -170,7 +171,8 @@ _Avoid_: status log
 
 **Stage / staged**:
 Placed on Leonardo disk and kept there. Staged files are deleted only deliberately.
-_Avoid_: stage in the tape sense; recalling from tape is recall.
+_Avoid_: stage in the tape sense, even though LRZ's own tool calls it so (`dsacli stage`);
+recalling from tape is recall.
 
 **Recall**:
 Bringing a file back from tape on the LRZ side, so that it can be fetched at all.
@@ -178,3 +180,36 @@ Bringing a file back from tape on the LRZ side, so that it can be fetched at all
 **Re-entrant**:
 Safe to re-run over work already done: each timestep decides for itself whether it is
 already finished and skips if so.
+
+### Cold Copy
+
+Terms owned by `meteocima/CHAPTER_INHOUSE` and defined in its `CONTEXT.md`; this repo uses
+them as defined there, and adds none of its own. Two words collide: **Archive** there is the
+platform's public store, here the GRIB2 archive; **Product** there is what a user's request
+yields, so this repo does not call the GRIB2 archive and the Cold Copy "two products".
+
+**Cold Copy**:
+CIMA's own copy of the wrfout's informative fields, hourly, on model levels, one surface file
+and one 3D file per calendar day. From 2018 back this repo writes it, beside the archive, from
+the same fetched wrfout.
+_Avoid_: backup, second archive
+
+**Ingest**:
+The code, in CHAPTER_INHOUSE, that writes the Cold Copy's files of one day from that day's
+wrfout. This repo calls it; it does not reimplement it.
+_Avoid_: conversion (that is what this repo does to make the archive)
+
+**Day files**:
+One calendar day of the Cold Copy, its surface file and its 3D file together. Day D reads 26
+wrfout of two runs: leads 29 and 30 of the run for D-1, leads 6 to 29 of the run for D.
+
+**Pass**:
+CHAPTER_INHOUSE's own traversal of the wrfout to write the Cold Copy where this repo does not:
+2019 to 2025.
+_Avoid_: campaign, which is this repo's
+
+**Hole**:
+A wrfout lost at the source, declared so after verification on LRZ, that a day file holds
+empty rather than waits for.
+_Avoid_: gap, a wrfout merely not fetched yet
+
