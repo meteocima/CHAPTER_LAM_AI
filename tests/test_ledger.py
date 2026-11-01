@@ -138,6 +138,15 @@ EXPECTED_KINDS = {
     'TAPE_TIMEOUT': ledger.PROBLEM,
     'UNREADABLE_TAPE': ledger.PROBLEM,
     'CONVERT_RESUBMITTED': ledger.CLEAR,
+    # #73: the Cold Copy's days (hpc/cold_copy_day.py, its own ledger). Done, or
+    # lost whole by decision, clears; waiting for wrfout or failing is a problem.
+    'CC_WRITTEN': ledger.CLEAR,
+    'CC_CHECKED': ledger.CLEAR,
+    'CC_ALREADY': ledger.CLEAR,
+    'CC_WHOLLY_LOST': ledger.CLEAR,
+    'CC_WRFOUT_DELETED': ledger.CLEAR,
+    'CC_INCOMPLETE': ledger.PROBLEM,
+    'CC_ERROR': ledger.PROBLEM,
 }
 
 
@@ -174,6 +183,8 @@ def test_every_token_lands_in_its_kind(token, kind):
 
 DRIVER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                       "hpc", "fetch_step.sh")
+# The Cold Copy's days (#73) write the same ledger format from Python.
+COLD_COPY_DAY = os.path.join(os.path.dirname(DRIVER), "cold_copy_day.py")
 
 
 TOKEN_LITERAL = r'"([A-Z][A-Z0-9_]{2,})"'
@@ -194,13 +205,21 @@ def tokens_written_by_the_driver():
             printed = re.search(r"\becho\s+" + TOKEN_LITERAL, ln)
             if printed:
                 found.add(printed.group(1))
-    return found
+    return found | tokens_written_by_cold_copy_day()
+
+
+def tokens_written_by_cold_copy_day():
+    """Every token hpc/cold_copy_day.py writes: its tokens all start CC_, whether
+    passed to log_status or held in its table of the Ingest's answers."""
+    with open(COLD_COPY_DAY) as fh:
+        return set(re.findall(r'"(CC_[A-Z_]+)"', fh.read()))
 
 
 def test_the_driver_tokens_can_still_be_read_out_of_the_driver():
     """Guards the three tests below: a subset assertion passes trivially against
     an empty set, so a regex that quietly stops matching would look like health."""
-    assert len(tokens_written_by_the_driver()) == 18
+    assert len(tokens_written_by_the_driver()) == 18 + 7
+    assert len(tokens_written_by_cold_copy_day()) == 7
 
 
 def test_the_driver_writes_no_token_this_module_has_not_been_taught():

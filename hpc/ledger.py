@@ -49,6 +49,18 @@ TOKEN_KINDS = {
     # CONVERT_SUBMITTED that eventually lets it go
     'CONVERT_WAITING': PROBLEM,
 
+    # #73: the Cold Copy's days, written by hpc/cold_copy_day.py into their own
+    # ledger, keyed by day (by timestep for a deleted wrfout). A day delivered, found
+    # delivered, or lost whole by decision (pipeline.lost_wrfouts) is clear; a day
+    # still missing wrfout waits, and an error is for a person.
+    'CC_WRITTEN': CLEAR,
+    'CC_CHECKED': CLEAR,
+    'CC_ALREADY': CLEAR,
+    'CC_WHOLLY_LOST': CLEAR,
+    'CC_WRFOUT_DELETED': CLEAR,
+    'CC_INCOMPLETE': PROBLEM,
+    'CC_ERROR': PROBLEM,
+
     # about the chain itself, keyed DRIVER@<host> and not about any timestep
     'RESPAWN_FAILED': CHAIN,
     'DATAMOVER_UNREACHABLE': CHAIN,

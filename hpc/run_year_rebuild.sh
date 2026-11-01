@@ -43,6 +43,18 @@
 # skips staged wrfout (download) and existing GRIBs (convert).
 # Stop: touch ${W}/logs/rebuild_sequence.stop  (plus the per-chain
 # rebuild_<label>_{dl,cv}.stop to stop a driver itself).
+# The Cold Copy beside the GRIB (#73, ADR-0001), from 2018 back:
+#   COLD_COPY=true YEARS="2018" bash hpc/run_year_rebuild.sh
+# Each wrfout is fetched once and feeds both. Both chains then keep what the Cold Copy
+# reads (pipeline.cold_copy) and the convert chain deletes nothing (KEEP_WRFOUT forced
+# true). As soon as a phase is downloaded, a SLURM array writes its days, one task per
+# day, through CHAPTER_INHOUSE's Ingest (hpc/cold_copy_day.py, cold-copy-day from the
+# clone pinned in COLD_COPY_DAY), beside the phase's converts. A sweep, before every
+# phase and at every quota poll, deletes each wrfout the archive and the Cold Copy are done with: the
+# Ingest releases it and its GRIB is written. Ledger: logs/cold_copy_status.log.
+# A trial, or any odd window: PHASES_SPEC="label sd sh ed eh;label sd sh ed eh"
+# replaces the phase table (e.g. the two days either side of a month boundary).
+#
 # Resume after a stop: PHASES_ONLY="<labels>" restricts the run to the phases still to
 # do. Since 2026-10-21 the download side also skips an hour whose GRIB exists, so a
 # finished phase is no longer fetched again in full; PHASES_ONLY spares walking it.
@@ -92,7 +104,21 @@ SANITY_ACCOUNT=aifpt_ailamit_0
 KEEP_WRFOUT="${KEEP_WRFOUT:-false}"
 # Restrict the run to these phase labels (space separated). Empty = all.
 PHASES_ONLY="${PHASES_ONLY:-}"
-export KEEP_WRFOUT PHASES_ONLY FETCH_PARALLEL
+# The Cold Copy beside the GRIB (#73): see the header.
+COLD_COPY="${COLD_COPY:-false}"
+COLD_COPY_DIR="${COLD_COPY_DIR:-${W}/cold_copy}"
+# cold-copy-day of the CHAPTER_INHOUSE clone pinned to a tag (ingest-2018-v2), its venv
+# built once without the dev group: never the development checkout, which is live code.
+COLD_COPY_DAY="${COLD_COPY_DAY:-${W}/cold_copy_src/cold_copy/.venv/bin/cold-copy-day}"
+# One day of the Cold Copy on one core (DCGP bills per core). 64G and 8 h are NOT
+# measured: the trial measures them (/usr/bin/time -v in each task's output), and
+# these two lines take its figures before the year is launched.
+CC_ACCOUNT="${CC_ACCOUNT:-aifpt_ailamit_0}"
+CC_MEM="${CC_MEM:-64G}"
+CC_TIME="${CC_TIME:-08:00:00}"
+PHASES_SPEC="${PHASES_SPEC:-}"
+export KEEP_WRFOUT PHASES_ONLY FETCH_PARALLEL COLD_COPY COLD_COPY_DIR COLD_COPY_DAY CC_ACCOUNT CC_MEM \
+       CC_TIME PHASES_SPEC
 
 # label  start_date start_hour  end_date end_hour
 # The first phase is a 72 h shakedown: an end-to-end failure shows up in ~2 h instead of
@@ -143,6 +169,12 @@ if [ -n "$YEARS" ]; then
     done
 fi
 
+if [ -n "$PHASES_SPEC" ]; then
+    PHASES=()
+    IFS=';' read -r -a _specs <<<"$PHASES_SPEC"
+    for s in "${_specs[@]}"; do PHASES+=("$s"); done
+fi
+
 # ---- self-detach from a snapshot --------------------------------------------
 if [ -z "${SEQ_DETACHED:-}" ]; then
     mkdir -p "$LOG_DIR"
@@ -176,6 +208,62 @@ used_tb() {
         | awk '/leonardo_work/ {gsub(/\*/,"",$2); printf "%.2f", $2/1024/1024/1024}'
 }
 
+# ---- the Cold Copy (#73) ---------------------------------------------------
+CC_STATUS_LOG="${LOG_DIR}/cold_copy_status.log"
+CC_LOST="${LOG_DIR}/cold_copy_lost.json"
+# The campaign's first and last day, over the whole phase table (not PHASES_ONLY): the
+# days whose Cold Copy it delivers. The state before the first 00Z is also read by the
+# day before, and 23Z of the last day by the day after; neither is this campaign's to
+# write (the day after the last is the Pass's, which fetches its own), so the sweep
+# does not wait for them.
+CC_FIRST_DAY=$(printf '%s\n' "${PHASES[@]}" | awk '{print $2}' | sort | head -n 1)
+CC_LAST_DAY=$(printf '%s\n' "${PHASES[@]}" | awk '{print $4}' | sort | tail -n 1)
+# The GRIB path of any hour, as a strftime pattern: convert_step.sh's GRIB_PATTERN.
+GRIB_PATTERN="${W}/grib_v3/%Y/%m/ailam-an-cima-3km-%Y-%Y-1h-v1-%Y%m%d%H.grib"
+
+# One array task per day of the phase [$2, $3], each writing its day of the Cold Copy
+# from the staged wrfout. A day still missing wrfout is CC_INCOMPLETE in the ledger,
+# not a failed task; a re-run delivers it, and finds the others delivered already.
+cc_submit_array() {
+    local label="$1" sd="$2" ed="$3" s0 n jid
+    s0=$(TZ=UTC date -d "$sd" +%s)
+    n=$(( ( $(TZ=UTC date -d "$ed" +%s) - s0 ) / 86400 + 1 ))
+    jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$CC_ACCOUNT" \
+        --nodes 1 --ntasks 1 --cpus-per-task 1 --mem "$CC_MEM" --time "$CC_TIME" \
+        --array "0-$((n - 1))" --job-name "cc_${label}" \
+        --output "${LOG_DIR}/cold_copy_${label}_%A_%a.out" \
+        --wrap "cd ${PROJECT_DIR}
+day=\$(TZ=UTC date -d @\$(( ${s0} + SLURM_ARRAY_TASK_ID * 86400 )) +%F)
+export COLD_COPY_DAY=${COLD_COPY_DAY}
+/usr/bin/time -v ${UV} run python hpc/cold_copy_day.py write \$day --wrfout-dir ${STAGING_DIR} \
+    --out ${COLD_COPY_DIR} --status-log ${CC_STATUS_LOG} --lost ${CC_LOST}")
+    log "CC_SUBMITTED | ${label}: array ${jid:-FAILED}, ${n} day(s) ${sd}..${ed} -> ${LOG_DIR}/cold_copy_${label}_<job>_<task>.out"
+}
+
+queued_cold_copy() {
+    local out
+    out=$(timeout 60 squeue -h -u "${USER}" -o %j 2>/dev/null) || return 1
+    printf '%s\n' "$out" | awk '/^cc_/ {n++} END {print n+0}'
+}
+
+# Delete every staged wrfout the archive and the Cold Copy are done with. Idempotent, cheap (stats
+# and one cold-copy-day released), so it runs before every phase and at every quota
+# poll: with KEEP_WRFOUT forced true it is the only thing that frees space.
+cc_sweep() {
+    [ "$COLD_COPY" = "true" ] || return 0
+    local before after
+    before=$(grep -c CC_WRFOUT_DELETED "$CC_STATUS_LOG" 2>/dev/null); before=${before:-0}
+    if ! COLD_COPY_DAY="$COLD_COPY_DAY" timeout 1800 "$UV" run python hpc/cold_copy_day.py sweep \
+            --wrfout-dir "$STAGING_DIR" --out "$COLD_COPY_DIR" --status-log "$CC_STATUS_LOG" \
+            --grib-pattern "$GRIB_PATTERN" --snap-dir "${W}/accum_snap" --lost "$CC_LOST" \
+            --span "$CC_FIRST_DAY" "$CC_LAST_DAY" >&2; then
+        log "CC_SWEEP_FAILED | the sweep exited non-zero: nothing is lost, the next one retries"
+        return 0
+    fi
+    after=$(grep -c CC_WRFOUT_DELETED "$CC_STATUS_LOG" 2>/dev/null); after=${after:-0}
+    log "CC_SWEEP | $((after - before)) wrfout deleted, $(find "${STAGING_DIR}" "${STAGING_DIR%/}_spinup" -name 'wrfout_d02_*' -type f 2>/dev/null | wc -l) left in staging"
+}
+
 # Hold here while the quota is above the threshold: the convert chain of the previous
 # phase is deleting wrfout as it goes, so this resolves itself instead of aborting.
 wait_for_quota() {
@@ -191,8 +279,11 @@ wait_for_quota() {
             log "QUOTA_OK | ${label}: ${tb} TB used (< ${QUOTA_STOP_TB} TB)"
             return 0
         fi
+        cc_sweep
         if [ "$warned" -eq 0 ]; then
-            if [ "$KEEP_WRFOUT" = "true" ]; then
+            if [ "$COLD_COPY" = "true" ]; then
+                log "QUOTA_HOLD | ${label}: ${tb} TB used >= ${QUOTA_STOP_TB} TB; waiting for the Cold Copy's days and the converts, after which the sweep frees space"
+            elif [ "$KEEP_WRFOUT" = "true" ]; then
                 log "QUOTA_HOLD | ${label}: ${tb} TB used >= ${QUOTA_STOP_TB} TB and KEEP_WRFOUT=true, so nothing will free space on its own: move or delete data, or raise QUOTA_STOP_TB"
             else
                 log "QUOTA_HOLD | ${label}: ${tb} TB used >= ${QUOTA_STOP_TB} TB; waiting for converts to free space"
@@ -207,6 +298,7 @@ dl_args() {
     local label="$1" sd="$2" sh="$3" ed="$4" eh="$5"
     echo "window.start_date=${sd} window.start_hour=${sh} window.end_date=${ed} window.end_hour=${eh}" \
          "pipeline.download_only=true paths.wrfout_dir=${STAGING_DIR}" \
+         "pipeline.cold_copy=${COLD_COPY} paths.cold_copy_dir=${COLD_COPY_DIR}" \
          "batch.fetch_parallel=${FETCH_PARALLEL} batch.size=${MAX_QUEUED} batch.max_queued_converts=0" \
          "paths.status_log=${LOG_DIR}/rebuild_${label}_dl_status.log" \
          "paths.driver_log=${LOG_DIR}/rebuild_${label}_dl_driver.log" \
@@ -217,6 +309,7 @@ cv_args() {
     local label="$1" sd="$2" sh="$3" ed="$4" eh="$5"
     echo "window.start_date=${sd} window.start_hour=${sh} window.end_date=${ed} window.end_hour=${eh}" \
          "paths.wrfout_dir=${STAGING_DIR} pipeline.keep_wrfout=${KEEP_WRFOUT}" \
+         "pipeline.cold_copy=${COLD_COPY} paths.cold_copy_dir=${COLD_COPY_DIR}" \
          "batch.fetch_parallel=${FETCH_PARALLEL} batch.size=${MAX_QUEUED} batch.max_queued_converts=${MAX_QUEUED}" \
          "paths.status_log=${LOG_DIR}/rebuild_${label}_cv_status.log" \
          "paths.driver_log=${LOG_DIR}/rebuild_${label}_cv_driver.log" \
@@ -273,9 +366,30 @@ case "$STAGING_DIR" in
         log "FATAL | STAGING_DIR must be this sequence's own staging slot, not ${STAGING_DIR}"; exit 1 ;;
 esac
 
-log "START | sequence on $(hostname), pid $$, staging ${STAGING_DIR}, keep_wrfout=${KEEP_WRFOUT}"
+if [ "$COLD_COPY" = "true" ]; then
+    # The sweep deletes, not convert_step.sh: a wrfout goes only once the archive
+    # and the Cold Copy are done with it.
+    KEEP_WRFOUT=true
+fi
+log "START | sequence on $(hostname), pid $$, staging ${STAGING_DIR}, keep_wrfout=${KEEP_WRFOUT}, cold_copy=${COLD_COPY}"
 cd "$PROJECT_DIR" || { log "FATAL | cannot cd ${PROJECT_DIR}"; exit 1; }
 mkdir -p "$STAGING_DIR"
+if [ "$COLD_COPY" = "true" ]; then
+    if ! [ -x "$COLD_COPY_DAY" ]; then
+        log "FATAL | COLD_COPY_DAY=${COLD_COPY_DAY} is not an executable: build the pinned clone first"
+        exit 1
+    fi
+    mkdir -p "$COLD_COPY_DIR"
+    # The wrfout verified lost on LRZ (pipeline.lost_wrfouts), read once for the whole
+    # sequence: an entry added later reaches it on a relaunch.
+    if ! "$UV" run python -c "import json; from omegaconf import OmegaConf
+c = OmegaConf.load('conf/pipeline.yaml').pipeline
+print(json.dumps(OmegaConf.to_container(c.get('lost_wrfouts', []) or [])))" > "$CC_LOST"; then
+        log "FATAL | cannot read pipeline.lost_wrfouts from conf/pipeline.yaml"
+        exit 1
+    fi
+    log "CC_START | Cold Copy into ${COLD_COPY_DIR}, $(grep -o '"run"' "$CC_LOST" | wc -l) wrfout declared lost, ingest ${COLD_COPY_DAY}"
+fi
 
 CV_PENDING=()   # "label sd sh ed eh offset" of the convert chains still to be waited on
 MONTHS=""       # distinct YYYY-MM touched, for the final sanity job
@@ -288,6 +402,7 @@ for ph in "${PHASES[@]}"; do
         continue
     fi
     case ",${MONTHS}," in *",${sd:0:7},"*) ;; *) MONTHS="${MONTHS:+${MONTHS},}${sd:0:7}" ;; esac
+    cc_sweep
     wait_for_quota "$label"
 
     dl_log="${LOG_DIR}/rebuild_${label}_dl_driver.log"
@@ -304,6 +419,9 @@ for ph in "${PHASES[@]}"; do
         exit 1
     fi
     log "STAGED | ${label}: $(find "${STAGING_DIR}" -name 'wrfout_d02_*' -type f | wc -l) wrfout on disk, $(used_tb) TB used"
+    # Every wrfout the phase's days read is local now: the month's hours, the spin-up
+    # 00Z of each day and the state before the window. The days need no GRIB.
+    [ "$COLD_COPY" = "true" ] && cc_submit_array "$label" "$sd" "$ed"
 
     # Convert this phase in the background (local files only, no datamover) while the
     # next phase downloads. Its wrfout are deleted one by one as the GRIBs appear.
@@ -334,6 +452,16 @@ while :; do
 done
 log "QUEUE_EMPTY | all converts left the queue"
 
+if [ "$COLD_COPY" = "true" ]; then
+    while :; do
+        check_stop
+        if nq=$(queued_cold_copy) && [ "$nq" -eq 0 ]; then break; fi
+        sleep "$POLL_SECONDS"
+    done
+    log "CC_QUEUE_EMPTY | every Cold Copy array left the queue"
+    cc_sweep
+fi
+
 # Phases whose report came back short. The sanity job below still runs -- knowing the
 # archive is clean is useful even when it is incomplete -- but the run must not end in DONE.
 INCOMPLETE=0
@@ -352,6 +480,32 @@ for pend in "${CV_PENDING[@]}"; do
         INCOMPLETE=$((INCOMPLETE + 1))
     fi
 done
+if [ "$COLD_COPY" = "true" ]; then
+    # A day is done when its checksum file is there (cold-copy-day): count them per
+    # phase, and name the days missing, with their last ledger line.
+    for pend in "${CV_PENDING[@]}"; do
+        read -r label sd sh ed eh off <<<"$pend"
+        s0=$(TZ=UTC date -d "$sd" +%s); e0=$(TZ=UTC date -d "$ed" +%s)
+        done_days=0; lost_days=0; missing=""
+        for (( t = s0; t <= e0; t += 86400 )); do
+            day=$(TZ=UTC date -d "@$t" +%F)
+            last=$(grep " | ${day} | CC_" "$CC_STATUS_LOG" 2>/dev/null | tail -n 1 | cut -d'|' -f3 | tr -d ' ')
+            if [ -f "${COLD_COPY_DIR}/_checksums/${day}.sha256" ]; then
+                done_days=$((done_days + 1))
+            elif [ "$last" = "CC_WHOLLY_LOST" ]; then
+                lost_days=$((lost_days + 1))     # every wrfout declared lost: by decision
+            else
+                missing="${missing} ${day}:${last:-never tried}"
+            fi
+        done
+        if [ -z "$missing" ]; then
+            log "CC_REPORT | ${label}: ${done_days} day(s) delivered, ${lost_days} lost whole"
+        else
+            log "CC_INCOMPLETE | ${label}: ${done_days} day(s) delivered, missing:${missing}"
+            INCOMPLETE=$((INCOMPLETE + 1))
+        fi
+    done
+fi
 for y in $(printf '%s\n' ${MONTHS//,/ } | cut -c1-4 | sort -u); do
     log "GRIB_COUNT | ${y}: $(find "${W}/grib_v3/${y}" -name '*.grib' 2>/dev/null | wc -l)"
 done

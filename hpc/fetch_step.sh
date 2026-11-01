@@ -64,6 +64,11 @@
 #   CONVERT_PARTITION, CONVERT_WALLTIME, CONVERT_MEM, CONVERT_ACCOUNT
 #   DOWNLOAD_ONLY                  - "1" to fetch only: no convert submitted, wrfout kept
 #   KEEP_WRFOUT                    - "1" to convert but keep the wrfout (passed to convert_step.sh)
+#   COLD_COPY                      - "1" to keep, for the Cold Copy's days (#73), the two files
+#                                    the archive deletes after their snapshot: the spin-up 00Z
+#                                    and the state before the window (fetched even if saved)
+#   COLD_COPY_DIR                  - the Cold Copy's directory, where a delivered day has its
+#                                    checksum file (_checksums/<day>.sha256)
 #   MAX_QUEUED_CONVERTS            - >0: cap on this user's queued conv_* jobs. A convert is
 #                                    submitted whenever fewer than this are queued (#65)
 #   DRY_RUN                       - "1" to print commands instead of running them
@@ -77,6 +82,8 @@ DRY_RUN="${DRY_RUN:-0}"
 DOWNLOAD_ONLY="${DOWNLOAD_ONLY:-0}"; export DOWNLOAD_ONLY
 # Convert but keep the input wrfout (e.g. converting files staged for someone else).
 KEEP_WRFOUT="${KEEP_WRFOUT:-0}"; export KEEP_WRFOUT
+COLD_COPY="${COLD_COPY:-0}"; export COLD_COPY
+COLD_COPY_DIR="${COLD_COPY_DIR:-}"; export COLD_COPY_DIR
 # Queue gate: CINECA frowns on hundreds of queued jobs. With a value > 0 the driver keeps
 # at most this many conv_* jobs of this user queued, submitting as soon as there is room.
 MAX_QUEUED_CONVERTS="${MAX_QUEUED_CONVERTS:-0}"
@@ -381,6 +388,19 @@ make_snapshot() {
     return 0
 }
 
+# Delete a wrfout the archive needs no more than its snapshot of ($1 the file, $2
+# what it is). With COLD_COPY=1 it stays: every file deleted here is one a Cold Copy
+# day reads (#73), and the sweep after the phase's array deletes it once that day is
+# written. The one place such a file goes, so that DRY_RUN can show it.
+drop_wrfout() {
+    if [ "${COLD_COPY}" = "1" ]; then
+        echo "  [COLD_COPY] keeping $1: $2, read by the Cold Copy"
+        return 0
+    fi
+    if [ "${DRY_RUN}" = "1" ]; then echo "  [DRY] rm $1"; return 0; fi
+    timeout 60 rm -f "$1" 2>/dev/null || true
+}
+
 # Snapshot of the archived state (day $1, hour $2), from its local wrfout.
 ensure_archive_snapshot() {
     local d="$1" h="$2" raw
@@ -404,7 +424,7 @@ ensure_spinup() {
         return 1
     fi
     make_snapshot "${dir}/${name}" "${d}T01" || return 1
-    [ "${DRY_RUN}" = "1" ] || timeout 60 rm -f "${dir}/${name}" 2>/dev/null || true
+    drop_wrfout "${dir}/${name}" "spin-up 00Z of run ${run}, snapshotted"
 }
 
 # A local 00Z that is not the archived state -- the spin-up 00Z of the run for its
@@ -418,10 +438,11 @@ evict_spinup_00z() {
     [ "${state#* }" = "$(archive_run "$d" 00)" ] && return 0
     # Snapshotted already, or 01Z converted already (and the snapshot released):
     # it has no use left, and ensure_spinup would never look at it again, so
-    # moving it would only leave 9 GB behind.
-    if [ -s "$(spinup_snap "$d")" ] || [ -f "$(grib_path "$d" 01)" ]; then
-        echo "  [${d}T00] local 00Z is from run ${state#* } (spin-up), no longer needed: deleted"
-        timeout 60 rm -f "$raw" 2>/dev/null || true
+    # moving it would only leave 9 GB behind. Unless the Cold Copy reads it (lead 6
+    # of the day's run, #73): then it moves like the others, and the sweep takes it.
+    if [ "${COLD_COPY}" != "1" ] && { [ -s "$(spinup_snap "$d")" ] || [ -f "$(grib_path "$d" 01)" ]; }; then
+        echo "  [${d}T00] local 00Z is from run ${state#* } (spin-up), no longer needed by the archive"
+        drop_wrfout "$raw" "spin-up 00Z of run ${state#* }, snapshotted"
         return 0
     fi
     dir="${SPINUP_DIR}/${state#* }"
@@ -576,7 +597,7 @@ snapshot_only() {
     fi
     ensure_archive_snapshot "$d" "$h" || return 1
     if [ "$fetched" = "1" ] && { [ -n "$edge" ] || { [ "${KEEP_WRFOUT}" != "1" ] && [ "${DOWNLOAD_ONLY}" != "1" ]; }; }; then
-        timeout 60 rm -f "$raw" 2>/dev/null || true
+        drop_wrfout "$raw" "${d}T${h}, fetched for its snapshot"
     fi
     read -r nd nh <<< "$(next_hour "$d" "$h")"
     submit_if_ready "$nd" "$nh" || true
@@ -613,7 +634,17 @@ fetch_edge_state() {
         return 0
     fi
     read -r pd ph <<< "$(TZ=UTC date -d "@$(( START_EPOCH - 3600 ))" '+%Y-%m-%d %H')"
-    if ! ensure_archive_snapshot "$pd" "$ph"; then
+    # The Cold Copy reads the file itself (its first day's 00Z starts from it), so
+    # a saved snapshot is not enough there: the download chain fetches it unless it is
+    # local or that day is delivered already (its checksum file, cold-copy-day), in
+    # which case the sweep took it and nobody reads it again. Never the convert chain,
+    # which sees local files only (#73).
+    if [ "${COLD_COPY}" = "1" ] && [ "${DOWNLOAD_ONLY}" = "1" ] \
+            && ! [ -f "$(raw_path "$pd" "$ph")" ] \
+            && ! [ -f "${COLD_COPY_DIR}/_checksums/${sd}.sha256" ]; then
+        echo "  [${pd}T${ph}] state before the window: fetching it for the Cold Copy."
+        snapshot_only "$pd" "$ph" edge || true
+    elif ! ensure_archive_snapshot "$pd" "$ph"; then
         echo "  [${pd}T${ph}] state before the window: fetching it for its snapshot."
         snapshot_only "$pd" "$ph" edge || true
     fi
@@ -622,7 +653,10 @@ fetch_edge_state() {
 
 close_window() {
     local e d h dt s missing gate_only
-    if [ "${DRY_RUN}" = "1" ]; then echo "  [DRY] close_window: edge state + pending sweep"; return 0; fi
+    if [ "${DRY_RUN}" = "1" ]; then
+        [ "${DIRECTION}" = "backward" ] && [ "${CLOSING}" != "1" ] && fetch_edge_state
+        echo "  [DRY] close_window: pending sweep"; return 0
+    fi
     # In forward order the edge was fetched by the first process; a CLOSING respawn
     # has done it already.
     [ "${DIRECTION}" = "backward" ] && [ "${CLOSING}" != "1" ] && fetch_edge_state

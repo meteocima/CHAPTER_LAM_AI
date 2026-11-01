@@ -41,6 +41,19 @@ STATE_WIDTH = max(len(f"RECALL:{tag}")
                   for tag, kind in ledger.TOKEN_KINDS.items() if kind == ledger.PROBLEM)
 
 
+def missing_00z_days(pipeline_cfg) -> list[str]:
+    """The days whose 00Z the archive writes missing: those listed the old way
+    (pipeline.missing_00z_days) and, from the one list of wrfout verified lost on LRZ
+    (pipeline.lost_wrfouts, #73), every lead 30 -- the whole 00Z of the day after
+    the day its run is for (#72). Other leads leave the archive waiting."""
+    days = {str(d) for d in pipeline_cfg.get("missing_00z_days", []) or []}
+    for item in pipeline_cfg.get("lost_wrfouts", []) or []:
+        if int(item["lead"]) == 30:
+            run = datetime.strptime(str(item["run"]), "%Y%m%d%H")
+            days.add(f"{run + timedelta(hours=30):%Y-%m-%d}")
+    return sorted(days)
+
+
 def parse_sbatch_jobid(output: str) -> str:
     """Extract job ID from sbatch output like 'Submitted batch job 12345'."""
     match = re.search(r"Submitted batch job (\d+)", output)
@@ -284,7 +297,9 @@ def app(cfg: DictConfig):
         "MIN_WRFOUT_BYTES": str(MIN_WRFOUT_BYTES),
         "DOWNLOAD_ONLY": "1" if download_only else "0",
         "KEEP_WRFOUT": "1" if cfg.pipeline.get("keep_wrfout", False) else "0",
-        "MISSING_00Z_DAYS": " ".join(str(d) for d in cfg.pipeline.get("missing_00z_days", []) or []),
+        "MISSING_00Z_DAYS": " ".join(missing_00z_days(cfg.pipeline)),
+        "COLD_COPY": "1" if cfg.pipeline.get("cold_copy", False) else "0",
+        "COLD_COPY_DIR": str(cfg.paths.get("cold_copy_dir", "")),
         "MAX_QUEUED_CONVERTS": str(int(cfg.batch.get("max_queued_converts", 0))),
         "DRY_RUN": "1" if dry_run else "0",
     }

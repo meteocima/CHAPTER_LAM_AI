@@ -42,11 +42,23 @@ pipeline:
   # is written with every message missing (bitmap) instead of waiting for the file. A
   # list of days, never a switch: a file that has not arrived yet is not lost.
   missing_00z_days: []
+  # Every wrfout VERIFIED lost at the source on LRZ, by run and lead, for the archive and the Cold Copy
+  # (#73): {run: "2018031018", lead: 30, reason: "..."}. The Cold Copy writes each as a
+  # Hole; a lead 30 also makes its 00Z missing in the archive, as missing_00z_days does.
+  # A person adds an entry after checking LRZ, never a script.
+  lost_wrfouts: []
+  # Keep, for the Cold Copy's days (#73), the spin-up 00Z and the state before the
+  # window, which the archive deletes after their snapshot. Set by run_year_rebuild.sh
+  # when it writes the Cold Copy beside the GRIB.
+  cold_copy: false
 
 # Paths on Leonardo
 paths:
   work_dir: /leonardo_work/AIFPT_AILAMIT/CHAPTER
   wrfout_dir: ${paths.work_dir}/wrfout
+  # The Cold Copy's day files, written beside the GRIB from 2018 back (#73), until
+  # they cross to CIMA's NAS (CHAPTER_INHOUSE #38).
+  cold_copy_dir: ${paths.work_dir}/cold_copy
   # GRIB2 schema, 246 messages. A new tree at every schema change, for the same
   # reason each time: convert_step.sh keys its re-entrancy on the output file
   # existing, so writing a wider schema into the old tree would silently skip
