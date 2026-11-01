@@ -383,8 +383,8 @@ if [ "$COLD_COPY" = "true" ]; then
     # The wrfout verified lost on LRZ (pipeline.lost_wrfouts), read once for the whole
     # sequence: an entry added later reaches it on a relaunch.
     if ! "$UV" run python -c "import json; from omegaconf import OmegaConf
-c = OmegaConf.load('conf/pipeline.yaml').pipeline
-print(json.dumps(OmegaConf.to_container(c.get('lost_wrfouts', []) or [])))" > "$CC_LOST"; then
+c = OmegaConf.to_container(OmegaConf.load('conf/pipeline.yaml').pipeline)
+print(json.dumps(c.get('lost_wrfouts') or []))" > "$CC_LOST"; then
         log "FATAL | cannot read pipeline.lost_wrfouts from conf/pipeline.yaml"
         exit 1
     fi
