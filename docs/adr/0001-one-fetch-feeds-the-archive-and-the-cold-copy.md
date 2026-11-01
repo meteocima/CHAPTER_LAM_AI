@@ -23,10 +23,11 @@ them again. Settled with the user in #73 on 2026-11-01.
 - **A Hole is declared, never inferred.** A wrfout missing from staging stops its day. It
   becomes a Hole only once its loss is verified on LRZ and it is listed, in the same list
   that writes the archive's missing timesteps.
-- **The Cold Copy leaves Leonardo through a manifest.** A day gets its sha256 manifest only
-  after its files are read back whole. CHAPTER_INHOUSE #38 copies days that have a manifest
-  to CIMA's NAS, checks size and sha256 there, and only then deletes them here. This repo
-  knows nothing of the NAS.
+- **The Cold Copy leaves Leonardo through a checksum file.** A day gets its `sha256sum`
+  file only after its files are read back whole. CHAPTER_INHOUSE #38 copies days that have
+  one to CIMA's NAS, checks them there, and only then deletes the day files here. The
+  checksum file stays, as the record that the day is done: without it a re-run would write
+  the day again. This repo knows nothing of the NAS.
 
 ## Considered options
 
