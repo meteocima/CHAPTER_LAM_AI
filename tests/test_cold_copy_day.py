@@ -244,3 +244,86 @@ def test_a_released_state_before_the_campaign_without_its_snapshot_is_kept(tmp_p
     _, _, files = staging(tmp_path)
     assert sweep(tmp_path, [files["23Z of 01-31"]], span=("2018-02-01", "2018-02-28")) == []
     assert files["23Z of 01-31"].exists()
+
+
+def lost_from(tmp, yaml_text):
+    """`cold_copy_day.py lost` on a pipeline configuration; (exit status, stdout, stderr)."""
+    conf = tmp / "pipeline.yaml"
+    conf.write_text(yaml_text)
+    out = subprocess.run([sys.executable, str(MODULE), "lost", "--conf", str(conf)],
+                         capture_output=True, text=True, cwd=ROOT)
+    return out.returncode, out.stdout, out.stderr
+
+
+def test_an_empty_lost_list_is_read_as_no_wrfout_lost(tmp_path):
+    # What stopped the first launch of the trial (0f87a6b): OmegaConf's empty list is
+    # falsy, and `or []` turned it into a list its own to_container refuses.
+    status, out, err = lost_from(tmp_path, "pipeline:\n  lost_wrfouts: []\n")
+    assert status == 0, err
+    assert json.loads(out) == []
+
+
+def test_a_configuration_without_lost_wrfouts_declares_none(tmp_path):
+    # Configurations from before #73 have no such key: nothing is lost by default.
+    status, out, err = lost_from(tmp_path, "pipeline:\n  missing_00z_days: []\n")
+    assert status == 0, err
+    assert json.loads(out) == []
+
+
+def test_each_declared_wrfout_is_handed_on_with_its_run_lead_and_reason(tmp_path):
+    status, out, err = lost_from(tmp_path, """pipeline:
+  lost_wrfouts:
+    - {run: "2018031018", lead: 30, reason: "ASSENTE on LRZ, ticket 1234"}
+    - {run: "2018031118", lead: 12, reason: "0 bytes after recall"}
+""")
+    assert status == 0, err
+    assert json.loads(out) == [
+        {"run": "2018031018", "lead": 30, "reason": "ASSENTE on LRZ, ticket 1234"},
+        {"run": "2018031118", "lead": 12, "reason": "0 bytes after recall"},
+    ]
+
+
+@pytest.mark.parametrize("entry, missing", [
+    ('{run: "2018031018", lead: 30}', "reason"),
+    ('{run: "2018031018", reason: "x"}', "lead"),
+    ('{lead: 30, reason: "x"}', "run"),
+])
+def test_a_declaration_missing_its_run_lead_or_reason_is_refused(tmp_path, entry, missing):
+    # A Hole carries its reason into the day file for whoever reads it (ADR-0028 of
+    # CHAPTER_INHOUSE); one without run or lead names no wrfout at all. Refused here, at
+    # the start of the sequence, not in the middle of a month's array.
+    status, _, err = lost_from(tmp_path, f"pipeline:\n  lost_wrfouts:\n    - {entry}\n")
+    assert status == 1
+    assert f"no {missing}" in err
+
+
+@pytest.mark.parametrize("entry, says", [
+    ('{run: "2018031018", lead: 30, reason: null}', "reason"),
+    ('{run: "2018031018", lead: 30, reason: ""}', "reason"),
+    ('{run: "2018031018", lead: "30h", reason: "x"}', "lead"),
+    ('{run: "2018031018", lead: 31, reason: "x"}', "lead"),
+    ('{run: "2018031018", lead: 5, reason: "x"}', "lead"),
+    ('{run: "2018-03-10T18", lead: 30, reason: "x"}', "run"),
+    ('{run: "2018031012", lead: 30, reason: "x"}', "run"),
+    ('"2018031018 30 x"', "not a mapping"),
+    ('2018031018', "not a mapping"),
+])
+def test_a_declaration_whose_values_name_no_wrfout_or_give_no_reason_is_refused(
+        tmp_path, entry, says):
+    # A run is initialised at 18Z (YYYYMMDD18) and gives leads 6 to 30 to the Cold Copy
+    # (ADR-0028 of CHAPTER_INHOUSE); anything else names no wrfout either side reads, and
+    # would fail inside a month's array, or match nothing and be ignored in silence.
+    status, _, err = lost_from(tmp_path, f"pipeline:\n  lost_wrfouts:\n    - {entry}\n")
+    assert status == 1, err
+    assert says in err
+    assert "Traceback" not in err
+
+
+def test_a_wrfout_declared_twice_is_refused(tmp_path):
+    status, _, err = lost_from(tmp_path, """pipeline:
+  lost_wrfouts:
+    - {run: "2018031018", lead: 30, reason: "x"}
+    - {run: "2018031018", lead: 30, reason: "y"}
+""")
+    assert status == 1
+    assert "twice" in err

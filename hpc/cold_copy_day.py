@@ -5,6 +5,7 @@ Copy. The Cold Copy is written by CHAPTER_INHOUSE's Ingest, through its command
 `cold-copy-day` (its #45), run from a clone pinned to a tag. This module is the one
 place that knows this repo's staging layout, and hands the Ingest what it holds:
 
+  lost       pipeline.lost_wrfouts, checked once at the start of a sequence, as JSON
   holdings   the staged wrfout by run and lead, plus those declared lost
              (pipeline.lost_wrfouts), as the JSON list `cold-copy-day` reads
   write DAY  one day of the Cold Copy: a task of the per-phase SLURM array
@@ -195,6 +196,51 @@ def sweep(wrfout_dir: Path, out: Path, status_log: Path, grib_pattern: str, snap
     return 0
 
 
+def lost_wrfouts(conf: Path) -> list[dict]:
+    """pipeline.lost_wrfouts of the configuration `conf`, checked and normalised to
+    {run: "YYYYMMDD18", lead: 6..30, reason: non-empty str}: the one reader of the list, for
+    the Cold Copy and the archive alike (submit_step_pipeline.missing_00z_days). An entry
+    that names no wrfout either reads, or gives no reason for its Hole, or comes twice, is a
+    ValueError here, at the start of a sequence, not inside a month's array."""
+    # Imported here: the array's `write` tasks and the sweep never read the configuration.
+    from omegaconf import OmegaConf
+    return check_lost(OmegaConf.to_container(OmegaConf.load(conf), resolve=True), str(conf))
+
+
+def check_lost(config: dict, where: str) -> list[dict]:
+    """The checked, normalised lost_wrfouts of a configuration already read (`config`, the
+    whole of it or its `pipeline` section)."""
+    pipeline = config.get("pipeline", config) if isinstance(config, dict) else None
+    if not isinstance(pipeline, dict):
+        raise ValueError(f"{where}: not a pipeline configuration")
+    checked, seen = [], set()
+    for n, entry in enumerate(pipeline.get("lost_wrfouts") or []):
+        what = f"{where}: pipeline.lost_wrfouts entry {n} ({entry!r})"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{what} is not a mapping of run, lead and reason")
+        for field in ("run", "lead", "reason"):
+            if field not in entry:
+                raise ValueError(f"{what} has no {field}")
+        run, lead, reason = str(entry["run"]), entry["lead"], entry["reason"]
+        try:
+            init = datetime.strptime(run, _RUN) if re.fullmatch(r"\d{10}", run) else None
+        except ValueError:
+            init = None
+        if init is None or init.hour != accum_hourly.INIT_HOUR:
+            raise ValueError(f"{what}: run must be the run's init time, YYYYMMDD"
+                             f"{accum_hourly.INIT_HOUR}")
+        if isinstance(lead, bool) or not isinstance(lead, int) or not 6 <= lead <= 30:
+            raise ValueError(f"{what}: lead must be a whole number of hours from 6 to 30, "
+                             f"the leads the archive and the Cold Copy read")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError(f"{what}: reason must say why the wrfout is lost")
+        if (run, lead) in seen:
+            raise ValueError(f"{what}: run {run} lead {lead} is declared twice")
+        seen.add((run, lead))
+        checked.append({"run": run, "lead": lead, "reason": reason})
+    return checked
+
+
 def _load_lost(path: Path) -> list[dict]:
     return json.loads(Path(path).read_text()) if path else []
 
@@ -206,6 +252,9 @@ def main(argv=None) -> int:
     held = verbs.add_parser("holdings")
     held.add_argument("--wrfout-dir", required=True, type=Path)
     held.add_argument("--lost", type=Path, help="JSON list of pipeline.lost_wrfouts")
+    listed = verbs.add_parser("lost")
+    listed.add_argument("--conf", required=True, type=Path,
+                        help="the pipeline configuration (conf/pipeline.yaml)")
     one = verbs.add_parser("write")
     one.add_argument("day")
     one.add_argument("--wrfout-dir", required=True, type=Path)
@@ -227,6 +276,9 @@ def main(argv=None) -> int:
         if args.verb == "holdings":
             json.dump(holdings(args.wrfout_dir, _load_lost(args.lost)), sys.stdout, indent=1)
             print()
+            return 0
+        if args.verb == "lost":
+            print(json.dumps(lost_wrfouts(args.conf)))
             return 0
         if args.verb == "write":
             return write(args.day, args.wrfout_dir, args.out, args.status_log,

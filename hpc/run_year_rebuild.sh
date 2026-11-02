@@ -226,11 +226,19 @@ CC_LAST_DAY=$(printf '%s\n' "${PHASES[@]}" | awk '{print $4}' | sort | tail -n 1
 # The GRIB path of any hour, as a strftime pattern: convert_step.sh's GRIB_PATTERN.
 GRIB_PATTERN="${W}/grib_v3/%Y/%m/ailam-an-cima-3km-%Y-%Y-1h-v1-%Y%m%d%H.grib"
 
+# pipeline.lost_wrfouts, checked (hpc/cold_copy_day.py lost), into CC_LOST. On failure
+# CC_LOST keeps the last list that passed, and the caller says so.
+cc_read_lost() {
+    "$UV" run python hpc/cold_copy_day.py lost --conf conf/pipeline.yaml > "${CC_LOST}.tmp" \
+        && mv -f "${CC_LOST}.tmp" "$CC_LOST"
+}
+
 # One array task per day of the phase [$2, $3], each writing its day of the Cold Copy
 # from the staged wrfout. A day still missing wrfout is CC_INCOMPLETE in the ledger,
 # not a failed task; a re-run delivers it, and finds the others delivered already.
 cc_submit_array() {
     local label="$1" sd="$2" ed="$3" s0 n jid
+    cc_read_lost || log "CC_LOST_KEPT | ${label}: pipeline.lost_wrfouts not valid (see above); the last valid list is used"
     s0=$(TZ=UTC date -d "$sd" +%s)
     n=$(( ( $(TZ=UTC date -d "$ed" +%s) - s0 ) / 86400 + 1 ))
     jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$CC_ACCOUNT" \
@@ -257,6 +265,7 @@ queued_cold_copy() {
 cc_sweep() {
     [ "$COLD_COPY" = "true" ] || return 0
     local before after
+    cc_read_lost || log "CC_LOST_KEPT | sweep: pipeline.lost_wrfouts not valid (see above); the last valid list is used"
     before=$(grep -c CC_WRFOUT_DELETED "$CC_STATUS_LOG" 2>/dev/null); before=${before:-0}
     if ! COLD_COPY_DAY="$COLD_COPY_DAY" timeout 1800 "$UV" run python hpc/cold_copy_day.py sweep \
             --wrfout-dir "$STAGING_DIR" --out "$COLD_COPY_DIR" --status-log "$CC_STATUS_LOG" \
@@ -385,12 +394,11 @@ if [ "$COLD_COPY" = "true" ]; then
         exit 1
     fi
     mkdir -p "$COLD_COPY_DIR"
-    # The wrfout verified lost on LRZ (pipeline.lost_wrfouts), read once for the whole
-    # sequence: an entry added later reaches it on a relaunch.
-    if ! "$UV" run python -c "import json; from omegaconf import OmegaConf
-c = OmegaConf.to_container(OmegaConf.load('conf/pipeline.yaml').pipeline)
-print(json.dumps(c.get('lost_wrfouts') or []))" > "$CC_LOST"; then
-        log "FATAL | cannot read pipeline.lost_wrfouts from conf/pipeline.yaml"
+    # The wrfout verified lost on LRZ (pipeline.lost_wrfouts), checked here once and
+    # then re-read before every array and sweep, as the archive re-reads it at every
+    # phase (missing_00z_days): an entry added mid-sequence reaches both.
+    if ! cc_read_lost; then
+        log "FATAL | pipeline.lost_wrfouts in conf/pipeline.yaml is not valid (see above)"
         exit 1
     fi
     log "CC_START | Cold Copy into ${COLD_COPY_DIR}, $(grep -o '"run"' "$CC_LOST" | wc -l) wrfout declared lost, ingest ${COLD_COPY_DAY}"

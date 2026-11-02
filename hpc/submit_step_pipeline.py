@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import accum_hourly  # noqa: E402  (needs the path insert above)
 from hpc import ledger  # noqa: E402
+from hpc.cold_copy_day import check_lost  # noqa: E402  (the one reader of lost_wrfouts, #73)
 
 # Width of the report's state column. Derived from the ledger vocabulary, because
 # the longest state is "RECALL:<longest problem token>" and hardcoding it means
@@ -47,9 +48,10 @@ def missing_00z_days(pipeline_cfg) -> list[str]:
     (pipeline.lost_wrfouts, #73), every lead 30 -- the whole 00Z of the day after
     the day its run is for (#72). Other leads leave the archive waiting."""
     days = {str(d) for d in pipeline_cfg.get("missing_00z_days", []) or []}
-    for item in pipeline_cfg.get("lost_wrfouts", []) or []:
-        if int(item["lead"]) == 30:
-            run = datetime.strptime(str(item["run"]), "%Y%m%d%H")
+    plain = OmegaConf.to_container(pipeline_cfg, resolve=True)
+    for item in check_lost(plain, "pipeline"):
+        if item["lead"] == 30:
+            run = datetime.strptime(item["run"], "%Y%m%d%H")
             days.add(f"{run + timedelta(hours=30):%Y-%m-%d}")
     return sorted(days)
 

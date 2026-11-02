@@ -33,3 +33,13 @@ def test_days_declared_the_old_way_still_count_once():
     cfg = pipeline(missing_00z_days=["2019-07-04", "2018-03-12"],
                    lost_wrfouts=[{"run": "2018031018", "lead": 30, "reason": "x"}])
     assert missing_00z_days(cfg) == ["2018-03-12", "2019-07-04"]
+
+
+def test_the_archive_refuses_the_declarations_the_cold_copy_refuses():
+    # One list, one reader (hpc/cold_copy_day.check_lost): a run that is no init time
+    # used to crash the phase launch at strptime, and a lead-30 entry with no reason
+    # went through for the archive while the Cold Copy refused it.
+    import pytest
+    cfg = pipeline(lost_wrfouts=[{"run": "2018031018", "lead": 30, "reason": ""}])
+    with pytest.raises(ValueError, match="reason"):
+        missing_00z_days(cfg)
