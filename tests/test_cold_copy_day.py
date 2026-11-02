@@ -158,7 +158,7 @@ def snapshot(tmp, valid, run):
     return touch(tmp / "accum_snap" / valid[:4] / valid[4:6] / f"accum_{valid}_run{run}.npz")
 
 
-def sweep(tmp, released, span=("2018-01-01", "2018-12-31")):
+def sweep(tmp, released, span=("2018-01-01", "2018-12-31"), extra=()):
     """The sweep after an array, the Ingest releasing `released`; the ledger lines."""
     wrfout, _, _ = staging(tmp)
     env = dict(os.environ, COLD_COPY_DAY=str(fake_ingest(tmp)), FAKE_RECORD=str(tmp / "rec"),
@@ -167,7 +167,7 @@ def sweep(tmp, released, span=("2018-01-01", "2018-12-31")):
     out = subprocess.run([sys.executable, str(MODULE), "sweep", "--wrfout-dir", str(wrfout),
                           "--out", str(tmp / "cold_copy"), "--status-log", str(ledger),
                           "--grib-pattern", str(tmp / GRIB_PATTERN),
-                          "--snap-dir", str(tmp / "accum_snap"), "--span", *span],
+                          "--snap-dir", str(tmp / "accum_snap"), "--span", *span, *extra],
                          capture_output=True, text=True, cwd=ROOT, env=env)
     assert out.returncode == 0, out.stderr
     lines = [[f.strip() for f in ln.split("|")] for ln in ledger.read_text().splitlines()] \
@@ -327,3 +327,18 @@ def test_a_wrfout_declared_twice_is_refused(tmp_path):
 """)
     assert status == 1
     assert "twice" in err
+
+
+def test_with_on_nas_the_sweep_waits_for_the_days_to_be_on_the_nas(tmp_path):
+    # With the Cold Copy, a wrfout goes only once the days reading it are on CIMA's NAS
+    # (#73, 2026-11-02): the Ingest is asked for exactly that.
+    ledger = tmp_path / "nas_push"
+    sweep(tmp_path, [], extra=("--on-nas", str(ledger)))
+    args = (tmp_path / "rec.args").read_text().split()
+    assert args[0] == "released"
+    assert args[args.index("--on-nas") + 1] == str(ledger)
+
+
+def test_without_on_nas_the_sweep_asks_for_delivered_days_as_before(tmp_path):
+    sweep(tmp_path, [])
+    assert "--on-nas" not in (tmp_path / "rec.args").read_text().split()

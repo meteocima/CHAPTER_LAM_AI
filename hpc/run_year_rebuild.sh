@@ -107,9 +107,16 @@ PHASES_ONLY="${PHASES_ONLY:-}"
 # The Cold Copy beside the GRIB (#73): see the header.
 COLD_COPY="${COLD_COPY:-false}"
 COLD_COPY_DIR="${COLD_COPY_DIR:-${W}/cold_copy}"
-# cold-copy-day of the CHAPTER_INHOUSE clone pinned to a tag (ingest-2018-v2), its venv
-# built once without the dev group: never the development checkout, which is live code.
-COLD_COPY_DAY="${COLD_COPY_DAY:-${W}/cold_copy_src/cold_copy/.venv/bin/cold-copy-day}"
+# The CHAPTER_INHOUSE clone pinned to a tag (ingest-2018-v3), never the development checkout,
+# which is live code. Its venv is built once, without the dev group and with the tools group
+# (Hydra, for tools.nas_push). It runs the Ingest (cold-copy-day) and the copy to CIMA's NAS
+# (tools.nas_push): with the Cold Copy, nothing of it stays on Leonardo but its checksum files.
+COLD_COPY_SRC="${COLD_COPY_SRC:-${W}/cold_copy_src}"
+COLD_COPY_DAY="${COLD_COPY_DAY:-${COLD_COPY_SRC}/cold_copy/.venv/bin/cold-copy-day}"
+# The copy's ledger and lock (CHAPTER_INHOUSE conf/site/leonardo.yaml, site.nas_push.ledger).
+NAS_LEDGER="${NAS_LEDGER:-${W}/nas_push}"
+# A failing copy is retried this many times, POLL_SECONDS apart, at the end of the campaign.
+NAS_FINISH_TRIES=12
 # One day of the Cold Copy on one core (DCGP bills per core, RAM is free). Memory,
 # measured: 64G was killed on all four days of the trial (OUT_OF_MEMORY, MaxRSS 66.9 GB,
 # 2026-11-01), on the first 3D variable; one 3D variable over 24 Valid Times alone
@@ -122,7 +129,8 @@ CC_ACCOUNT="${CC_ACCOUNT:-aifpt_ailamit_0}"
 CC_MEM="${CC_MEM:-128G}"
 CC_TIME="${CC_TIME:-08:00:00}"
 PHASES_SPEC="${PHASES_SPEC:-}"
-export KEEP_WRFOUT PHASES_ONLY FETCH_PARALLEL COLD_COPY COLD_COPY_DIR COLD_COPY_DAY CC_ACCOUNT CC_MEM \
+export KEEP_WRFOUT PHASES_ONLY FETCH_PARALLEL COLD_COPY COLD_COPY_DIR COLD_COPY_DAY COLD_COPY_SRC NAS_LEDGER \
+       CC_ACCOUNT CC_MEM \
        CC_TIME PHASES_SPEC
 
 # label  start_date start_hour  end_date end_hour
@@ -236,21 +244,51 @@ cc_read_lost() {
 # One array task per day of the phase [$2, $3], each writing its day of the Cold Copy
 # from the staged wrfout. A day still missing wrfout is CC_INCOMPLETE in the ledger,
 # not a failed task; a re-run delivers it, and finds the others delivered already.
+# $4, if given, is the list of task indices (days from $2) to write: a retry.
+CC_ARRAYS=()   # "label sd ed jid retried" of the arrays submitted, for the one retry
 cc_submit_array() {
-    local label="$1" sd="$2" ed="$3" s0 n jid
+    local label="$1" sd="$2" ed="$3" indices="${4:-}" s0 n jid
     cc_read_lost || log "CC_LOST_KEPT | ${label}: pipeline.lost_wrfouts not valid (see above); the last valid list is used"
     s0=$(TZ=UTC date -d "$sd" +%s)
     n=$(( ( $(TZ=UTC date -d "$ed" +%s) - s0 ) / 86400 + 1 ))
+    [ -n "$indices" ] || indices="0-$((n - 1))"
     jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$CC_ACCOUNT" \
         --nodes 1 --ntasks 1 --cpus-per-task 1 --mem "$CC_MEM" --time "$CC_TIME" \
-        --array "0-$((n - 1))" --job-name "cc_${label}" \
+        --array "$indices" --job-name "cc_${label}" \
         --output "${LOG_DIR}/cold_copy_${label}_%A_%a.out" \
         --wrap "cd ${PROJECT_DIR}
 day=\$(TZ=UTC date -d @\$(( ${s0} + SLURM_ARRAY_TASK_ID * 86400 )) +%F)
 export COLD_COPY_DAY=${COLD_COPY_DAY}
 /usr/bin/time -v ${UV} run python hpc/cold_copy_day.py write \$day --wrfout-dir ${STAGING_DIR} \
     --out ${COLD_COPY_DIR} --status-log ${CC_STATUS_LOG} --lost ${CC_LOST}")
-    log "CC_SUBMITTED | ${label}: array ${jid:-FAILED}, ${n} day(s) ${sd}..${ed} -> ${LOG_DIR}/cold_copy_${label}_<job>_<task>.out"
+    log "CC_SUBMITTED | ${label}: array ${jid:-FAILED}, tasks ${indices} of ${sd}..${ed} -> ${LOG_DIR}/cold_copy_${label}_<job>_<task>.out"
+    [ -n "$jid" ] && CC_ARRAYS+=("${label} ${sd} ${ed} ${jid} $([ "${4:-}" ] && echo 1 || echo 0)")
+}
+
+# Once an array has left the queue, its days that failed (CC_ERROR) or still miss a wrfout
+# (CC_INCOMPLETE) are written again, once: a transient failure must not hold their wrfout
+# to the end of the campaign. What fails twice waits for a person (CC_RETRY_EXHAUSTED).
+cc_retry_failed() {
+    local i entry label sd ed jid retried s0 t day last idx
+    for i in "${!CC_ARRAYS[@]}"; do
+        read -r label sd ed jid retried <<<"${CC_ARRAYS[$i]}"
+        [ -n "$(timeout 60 squeue -h -j "$jid" 2>/dev/null)" ] && continue
+        s0=$(TZ=UTC date -d "$sd" +%s); idx=""
+        for (( t = s0; t <= $(TZ=UTC date -d "$ed" +%s); t += 86400 )); do
+            day=$(TZ=UTC date -d "@$t" +%F)
+            [ -f "${COLD_COPY_DIR}/_checksums/${day}.sha256" ] && continue
+            last=$(grep " | ${day} | CC_" "$CC_STATUS_LOG" 2>/dev/null | tail -n 1 | cut -d'|' -f3 | tr -d ' ')
+            case "$last" in CC_ERROR|CC_INCOMPLETE) idx="${idx:+${idx},}$(( (t - s0) / 86400 ))" ;; esac
+        done
+        unset 'CC_ARRAYS[i]'
+        [ -n "$idx" ] || continue
+        if [ "$retried" = "1" ]; then
+            log "CC_RETRY_EXHAUSTED | ${label}: tasks ${idx} of ${sd}..${ed} failed twice; their wrfout wait for a person (see ${CC_STATUS_LOG})"
+        else
+            log "CC_RETRY | ${label}: tasks ${idx} of ${sd}..${ed} failed; written once more"
+            cc_submit_array "$label" "$sd" "$ed" "$idx"
+        fi
+    done
 }
 
 queued_cold_copy() {
@@ -259,22 +297,60 @@ queued_cold_copy() {
     printf '%s\n' "$out" | awk '/^cc_/ {n++} END {print n+0}'
 }
 
+# ---- the copy to CIMA's NAS (#73, CHAPTER_INHOUSE #38) ---------------------------
+NAS_LOG="${LOG_DIR}/nas_push.log"
+NAS_EXIT="${LOG_DIR}/nas_push.exit"
+
+# tools.nas_push <verb> from the pinned clone, on this login node (the datamover is
+# reachable only from here): it only waits on ssh, the hashing is done on WRF-GPU.
+nas_push() {
+    (cd "$COLD_COPY_SRC" && CHAPTER_SITE=leonardo "${COLD_COPY_SRC}/cold_copy/.venv/bin/python" \
+        -m tools.nas_push "$1" "site.nas_push.source=${COLD_COPY_DIR}" \
+        "site.nas_push.ledger=${NAS_LEDGER}")
+}
+
+# Is a copy running? Its own lock says so, whichever login node runs it (flock holds
+# across nodes on /leonardo_work); a pid would not, see CLAUDE.md on pgrep.
+nas_push_running() {
+    mkdir -p "$NAS_LEDGER"
+    ! flock -n "${NAS_LEDGER}/.lock" true
+}
+
+# Start a copy in the background if none runs and something is handed off and not sent
+# (`status` reads the ledger and Leonardo, never the NAS). A copy that ended badly is said
+# once, and this one retries it: with the NAS unreachable the wrfout wait, and the quota
+# gate holds new downloads.
+nas_push_bg() {
+    [ "$COLD_COPY" = "true" ] || return 0
+    nas_push_running && return 0
+    if [ -s "$NAS_EXIT" ] && [ "$(cat "$NAS_EXIT")" != "0" ]; then
+        log "NAS_PUSH_FAILED | exit $(cat "$NAS_EXIT"): $(grep 'nas_push:' "$NAS_LOG" | tail -n 1); retrying"
+    fi
+    rm -f "$NAS_EXIT"
+    nas_push status 2>/dev/null | grep -q ' 0 to send' && return 0
+    echo "=== $(date -u +%FT%TZ) run" >> "$NAS_LOG"
+    setsid bash -c "$(declare -f nas_push); nas_push run >> $(printf %q "$NAS_LOG") 2>&1
+        echo \$? > $(printf %q "$NAS_EXIT")" < /dev/null &
+}
+
 # Delete every staged wrfout the archive and the Cold Copy are done with. Idempotent, cheap (stats
 # and one cold-copy-day released), so it runs before every phase and at every quota
 # poll: with KEEP_WRFOUT forced true it is the only thing that frees space.
 cc_sweep() {
     [ "$COLD_COPY" = "true" ] || return 0
     local before after
+    [ "${1:-}" = "final" ] || { nas_push_bg; cc_retry_failed; }
     cc_read_lost || log "CC_LOST_KEPT | sweep: pipeline.lost_wrfouts not valid (see above); the last valid list is used"
     before=$(grep -c CC_WRFOUT_DELETED "$CC_STATUS_LOG" 2>/dev/null); before=${before:-0}
     if ! COLD_COPY_DAY="$COLD_COPY_DAY" timeout 1800 "$UV" run python hpc/cold_copy_day.py sweep \
             --wrfout-dir "$STAGING_DIR" --out "$COLD_COPY_DIR" --status-log "$CC_STATUS_LOG" \
             --grib-pattern "$GRIB_PATTERN" --snap-dir "${W}/accum_snap" --lost "$CC_LOST" \
-            --span "$CC_FIRST_DAY" "$CC_LAST_DAY" >&2; then
+            --span "$CC_FIRST_DAY" "$CC_LAST_DAY" --on-nas "$NAS_LEDGER" >&2; then
         log "CC_SWEEP_FAILED | the sweep exited non-zero: nothing is lost, the next one retries"
         return 0
     fi
     after=$(grep -c CC_WRFOUT_DELETED "$CC_STATUS_LOG" 2>/dev/null); after=${after:-0}
+    [ "$after" -gt "$before" ] || [ "${1:-}" = "final" ] || return 0
     log "CC_SWEEP | $((after - before)) wrfout deleted, $(find "${STAGING_DIR}" "${STAGING_DIR%/}_spinup" -name 'wrfout_d02_*' -type f 2>/dev/null | wc -l) left in staging"
 }
 
@@ -357,6 +433,9 @@ wait_chain() {
     while :; do
         sleep "$POLL_SECONDS"
         check_stop
+        # While a chain runs, the Cold Copy goes on: arrays retried, days to the NAS,
+        # wrfout freed as soon as their days are there (#73).
+        cc_sweep
         if tail -c "+${offset}" "$dlog" | grep -q "Window complete"; then
             log "WINDOW_COMPLETE | ${label} ${kind}"
             return 0
@@ -391,6 +470,14 @@ mkdir -p "$STAGING_DIR"
 if [ "$COLD_COPY" = "true" ]; then
     if ! [ -x "$COLD_COPY_DAY" ]; then
         log "FATAL | COLD_COPY_DAY=${COLD_COPY_DAY} is not an executable: build the pinned clone first"
+        exit 1
+    fi
+    if ! (cd "$COLD_COPY_SRC" && "${COLD_COPY_SRC}/cold_copy/.venv/bin/python" -c "import hydra, cold_copy.nas, tools.nas_push"); then
+        log "FATAL | ${COLD_COPY_SRC} cannot run tools.nas_push (see above): pin it to ingest-2018-v3 or later and build its venv with --group tools"
+        exit 1
+    fi
+    if ! "$COLD_COPY_DAY" released --help | grep -q -- '--on-nas'; then
+        log "FATAL | ${COLD_COPY_DAY} has no released --on-nas: pin the clone to ingest-2018-v3 or later"
         exit 1
     fi
     mkdir -p "$COLD_COPY_DIR"
@@ -468,11 +555,28 @@ log "QUEUE_EMPTY | all converts left the queue"
 if [ "$COLD_COPY" = "true" ]; then
     while :; do
         check_stop
-        if nq=$(queued_cold_copy) && [ "$nq" -eq 0 ]; then break; fi
+        cc_sweep
+        if nq=$(queued_cold_copy) && [ "$nq" -eq 0 ] && [ ${#CC_ARRAYS[@]} -eq 0 ]; then break; fi
         sleep "$POLL_SECONDS"
     done
-    log "CC_QUEUE_EMPTY | every Cold Copy array left the queue"
-    cc_sweep
+    log "CC_QUEUE_EMPTY | every Cold Copy array left the queue, retries included"
+    # The end of the campaign: every day to the NAS, then the Static file off Leonardo
+    # (nas_push finish), then the last sweep, which may now take every wrfout.
+    NAS_FINISHED=0
+    for (( try = 1; try <= NAS_FINISH_TRIES; try++ )); do
+        check_stop
+        while nas_push_running; do sleep 60; done
+        echo "=== $(date -u +%FT%TZ) finish, try ${try}" >> "$NAS_LOG"
+        if nas_push finish >> "$NAS_LOG" 2>&1; then
+            log "NAS_FINISHED | every day on the NAS, the Static file off Leonardo"
+            NAS_FINISHED=1
+            break
+        fi
+        log "NAS_PUSH_FAILED | finish, try ${try}/${NAS_FINISH_TRIES}: $(grep 'nas_push:' "$NAS_LOG" | tail -n 1)"
+        [ "$try" -lt "$NAS_FINISH_TRIES" ] && sleep "$POLL_SECONDS"
+    done
+    rm -f "$NAS_EXIT"
+    cc_sweep final
 fi
 
 # Phases whose report came back short. The sanity job below still runs -- knowing the
@@ -542,8 +646,23 @@ export LD_LIBRARY_PATH=\$GCC12_RT:\$ECCODES_LIB:\${LD_LIBRARY_PATH:-}
 ${UV} run python hpc/check_grib_sanity.py${month_args}")
 log "SANITY_SUBMITTED | array job ${jid:-FAILED} (${n_months} months) -> ${LOG_DIR}/rebuild_sanity_${jid}_<task>.out"
 
+if [ "$COLD_COPY" = "true" ]; then
+    # Nothing but the GRIB, and the checksum files that record what is done, may stay.
+    left_wrfout=$(find "${STAGING_DIR}" "${STAGING_DIR%/}_spinup" -name 'wrfout_d02_*' -type f 2>/dev/null | wc -l)
+    left_cc=$(find "${COLD_COPY_DIR}" -maxdepth 1 -name 'chapter_cc_*.nc*' 2>/dev/null | wc -l)
+    if [ "$NAS_FINISHED" != "1" ]; then
+        log "NAS_NOT_FINISHED | the copy to the NAS failed ${NAS_FINISH_TRIES} times in a row (see ${NAS_LOG}); re-run this script once the NAS is reachable"
+        INCOMPLETE=$((INCOMPLETE + 1))
+    fi
+    if [ "$left_wrfout" -gt 0 ] || [ "$left_cc" -gt 0 ]; then
+        log "LEONARDO_NOT_CLEAN | ${left_wrfout} wrfout in staging, ${left_cc} Cold Copy files in ${COLD_COPY_DIR}"
+        INCOMPLETE=$((INCOMPLETE + 1))
+    else
+        log "LEONARDO_CLEAN | no wrfout and no Cold Copy file left on Leonardo"
+    fi
+fi
 if [ "$INCOMPLETE" -gt 0 ]; then
-    log "INCOMPLETE | ${INCOMPLETE} phase(s) ended short; NOT reporting DONE. Re-run this"
+    log "INCOMPLETE | ${INCOMPLETE} check(s) failed (phases, Cold Copy, NAS, Leonardo not clean); NOT reporting DONE. Re-run this"
     log "INCOMPLETE | script (re-entrant) or the affected phase before starting another tranche."
     exit 1
 fi

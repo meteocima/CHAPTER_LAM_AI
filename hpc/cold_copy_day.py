@@ -163,17 +163,20 @@ def _spinup_may_drop(valid: datetime, snap_dir: Path, grib_pattern: str) -> bool
 
 
 def sweep(wrfout_dir: Path, out: Path, status_log: Path, grib_pattern: str, snap_dir: Path,
-          lost: list[dict], span: tuple[str, str]) -> int:
+          lost: list[dict], span: tuple[str, str], on_nas: Path | None = None) -> int:
     """Delete every staged wrfout the archive and the Cold Copy are done with: the Ingest
     releases it (`cold-copy-day released`: every Cold Copy day reading it within `span`, the
     campaign's first and last day, is delivered), and the archive no longer needs it.
-    Only what this module handed over is ever deleted."""
+    Only what this module handed over is ever deleted. With `on_nas`, the ledger of the copy
+    to CIMA's NAS, a reading day counts only once that ledger records it there
+    (`released --on-nas`, #73)."""
     have = staged(wrfout_dir)
     with tempfile.NamedTemporaryFile("w", suffix=".json", prefix="holdings_sweep_") as f:
         json.dump(holdings(wrfout_dir, lost), f)
         f.flush()
         run = subprocess.run([_ingest_command(), "released", "--out", str(out),
-                              "--holdings", f.name, "--span", *span],
+                              "--holdings", f.name, "--span", *span,
+                              *(["--on-nas", str(on_nas)] if on_nas else [])],
                              capture_output=True, text=True)
     if run.returncode != 0:
         raise ValueError(f"cold-copy-day released exited {run.returncode}: "
@@ -271,6 +274,8 @@ def main(argv=None) -> int:
     free.add_argument("--lost", type=Path, help="JSON list of pipeline.lost_wrfouts")
     free.add_argument("--span", nargs=2, required=True, metavar=("FIRST", "LAST"),
                       help="the campaign's first and last day: the days it delivers")
+    free.add_argument("--on-nas", type=Path, metavar="LEDGER",
+                      help="wait for the NAS copy's ledger to record the days reading a wrfout")
     args = parser.parse_args(argv)
     try:
         if args.verb == "holdings":
@@ -285,7 +290,8 @@ def main(argv=None) -> int:
                          _load_lost(args.lost))
         if args.verb == "sweep":
             return sweep(args.wrfout_dir, args.out, args.status_log, args.grib_pattern,
-                         args.snap_dir, _load_lost(args.lost), tuple(args.span))
+                         args.snap_dir, _load_lost(args.lost), tuple(args.span),
+                         on_nas=args.on_nas)
     except ValueError as e:
         print(f"cold_copy_day.py: {e}", file=sys.stderr)
         return 1
