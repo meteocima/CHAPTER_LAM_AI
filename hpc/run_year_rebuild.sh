@@ -115,7 +115,9 @@ COLD_COPY_DAY="${COLD_COPY_DAY:-${W}/cold_copy_src/cold_copy/.venv/bin/cold-copy
 # 2026-11-01), on the first 3D variable; one 3D variable over 24 Valid Times alone
 # peaks at 70.5 GB (74.1 GB MaxRSS), the float64 copies of the Ingest's 16-bit packing
 # (job 63155174, synthetic 24x49x1641x1353). PH and W have 50 levels, so 128G leaves
-# ~50% above it. The time is not measured yet: the trial's rerun sets it.
+# ~50% above it. Measured on the trial's rerun (2026-11-02, jobs 63155691 and 63156557,
+# 2018-01-30..02-02): MaxRSS 75.98 GB on every day, 4:08 to 5:00 wall, so 8 h leaves
+# ~60%. A day writes 21.9 GB (3D 19.3, surface 2.6-2.7), 2018 about 8 TB.
 CC_ACCOUNT="${CC_ACCOUNT:-aifpt_ailamit_0}"
 CC_MEM="${CC_MEM:-128G}"
 CC_TIME="${CC_TIME:-08:00:00}"
