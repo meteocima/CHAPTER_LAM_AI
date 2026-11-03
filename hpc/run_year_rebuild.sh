@@ -427,6 +427,16 @@ launch_chain() {
     echo "$offset"
 }
 
+# --- chain log (extracted by tests/test_sequence_chain_log.py; keep the markers) ---
+# Does the driver log $1, from byte $2 on, say $3? grep reads it all, never -q: under
+# pipefail `tail | grep -q` is false whenever tail still writes after the match and takes
+# SIGPIPE, which on Lustre it does for some logs and not others. It stopped the 2018
+# campaign at its first month on 2026-11-02 (#73, tests/test_sequence_chain_log.py).
+chain_log_says() {
+    tail -c "+$2" "$1" | grep -F -- "$3" > /dev/null
+}
+# --- end chain log ---
+
 # Poll a driver log until it reports the window done. 0 = complete, 1 = dead, 2 = stopped.
 wait_chain() {
     local kind="$1" label="$2" dlog="$3" offset="$4"
@@ -436,11 +446,11 @@ wait_chain() {
         # While a chain runs, the Cold Copy goes on: arrays retried, days to the NAS,
         # wrfout freed as soon as their days are there (#73).
         cc_sweep
-        if tail -c "+${offset}" "$dlog" | grep -q "Window complete"; then
+        if chain_log_says "$dlog" "$offset" "Window complete"; then
             log "WINDOW_COMPLETE | ${label} ${kind}"
             return 0
         fi
-        if tail -c "+${offset}" "$dlog" | grep -q "STOP flag present"; then
+        if chain_log_says "$dlog" "$offset" "STOP flag present"; then
             log "STOPPED | ${label} ${kind}: driver stopped by its stop flag"
             return 2
         fi

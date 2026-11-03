@@ -176,11 +176,11 @@ wait_chain() {
     while :; do
         sleep "$POLL_SECONDS"
         check_stop
-        if tail -c "+${offset}" "$dlog" | grep -q "Window complete"; then
+        if tail -c "+${offset}" "$dlog" | grep -F "Window complete" > /dev/null; then  # never -q under pipefail (#73)
             log "WINDOW_COMPLETE | ${label} ${kind}"
             return 0
         fi
-        if tail -c "+${offset}" "$dlog" | grep -q "STOP flag present"; then
+        if tail -c "+${offset}" "$dlog" | grep -F "STOP flag present" > /dev/null; then
             log "STOPPED | ${label} ${kind}: driver stopped by its stop flag"
             return 2
         fi

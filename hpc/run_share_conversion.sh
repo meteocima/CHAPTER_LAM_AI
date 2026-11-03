@@ -132,11 +132,11 @@ for ph in "${PHASES[@]}"; do
     while :; do
         sleep "$POLL_SECONDS"
         check_stop
-        if tail -c "+${offset}" "$dlog" | grep -q "Window complete"; then
+        if tail -c "+${offset}" "$dlog" | grep -F "Window complete" > /dev/null; then  # never -q under pipefail (#73)
             log "WINDOW_COMPLETE | ${y}"
             break
         fi
-        if tail -c "+${offset}" "$dlog" | grep -q "STOP flag present"; then
+        if tail -c "+${offset}" "$dlog" | grep -F "STOP flag present" > /dev/null; then
             log "STOPPED | ${y}: driver stopped by its stop flag; exiting."
             exit 0
         fi
