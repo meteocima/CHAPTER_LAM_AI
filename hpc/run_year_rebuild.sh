@@ -245,13 +245,19 @@ cc_read_lost() {
 # from the staged wrfout. A day still missing wrfout is CC_INCOMPLETE in the ledger,
 # not a failed task; a re-run delivers it, and finds the others delivered already.
 # $4, if given, is the list of task indices (days from $2) to write: a retry.
-CC_ARRAYS=()   # "label sd ed jid retried" of the arrays submitted, for the one retry
+# "label sd ed jid retried submitted" of each array submitted, for its one retry: fields
+# by position, written by cc_submit_array and read by cc_retry_failed.
+CC_ARRAYS=()
+# Polls each array went without any answer from sacct nor squeue (cc_retry_failed).
+declare -A CC_UNKNOWN=()
+CC_UNKNOWN_POLLS=12
 cc_submit_array() {
-    local label="$1" sd="$2" ed="$3" indices="${4:-}" s0 n jid
+    local label="$1" sd="$2" ed="$3" indices="${4:-}" s0 n jid submitted
     cc_read_lost || log "CC_LOST_KEPT | ${label}: pipeline.lost_wrfouts not valid (see above); the last valid list is used"
     s0=$(TZ=UTC date -d "$sd" +%s)
     n=$(( ( $(TZ=UTC date -d "$ed" +%s) - s0 ) / 86400 + 1 ))
     [ -n "$indices" ] || indices="0-$((n - 1))"
+    submitted=$(date -u +%FT%TZ)
     jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$CC_ACCOUNT" \
         --nodes 1 --ntasks 1 --cpus-per-task 1 --mem "$CC_MEM" --time "$CC_TIME" \
         --array "$indices" --job-name "cc_${label}" \
@@ -262,24 +268,64 @@ export COLD_COPY_DAY=${COLD_COPY_DAY}
 /usr/bin/time -v ${UV} run python hpc/cold_copy_day.py write \$day --wrfout-dir ${STAGING_DIR} \
     --out ${COLD_COPY_DIR} --status-log ${CC_STATUS_LOG} --lost ${CC_LOST}")
     log "CC_SUBMITTED | ${label}: array ${jid:-FAILED}, tasks ${indices} of ${sd}..${ed} -> ${LOG_DIR}/cold_copy_${label}_<job>_<task>.out"
-    [ -n "$jid" ] && CC_ARRAYS+=("${label} ${sd} ${ed} ${jid} $([ "${4:-}" ] && echo 1 || echo 0)")
+    [ -n "$jid" ] && CC_ARRAYS+=("${label} ${sd} ${ed} ${jid} $([ "${4:-}" ] && echo 1 || echo 0) ${submitted}")
 }
+
+# --- cold copy retry (extracted by tests/test_cold_copy_retry.py; keep the markers) ---
+# Is array $1 over? 0: sacct lists its tasks and every one is in a final state; 1: one is
+# not; 2: sacct gave no answer (failed, or nothing yet). An empty answer is never "over":
+# on 2026-11-04 a `squeue -j` that answered nothing made the sequence take April's running
+# array for gone and write the month twice (#73).
+cc_array_done() {
+    local states
+    states=$(timeout 60 sacct -n -X -P -j "$1" -o State 2>/dev/null) || return 2
+    [ -n "$states" ] || return 2
+    if printf '%s\n' "$states" | grep -vE '^(COMPLETED|FAILED|CANCELLED|TIMEOUT|OUT_OF_MEMORY|NODE_FAIL|PREEMPTED|BOOT_FAIL|DEADLINE|REVOKED|SPECIAL_EXIT)' > /dev/null; then
+        return 1
+    fi
+    return 0
+}
+# The days of $1..$2, as task indices from $1, that are not delivered and have no outcome
+# since $3 (the array's submission, UTC ISO) other than a failure: their last Cold Copy
+# token since then is CC_ERROR or CC_INCOMPLETE, or there is none -- a task SLURM killed
+# before it wrote one. Comma-separated, empty if none. A token from before the array says
+# nothing about it: the relay outage of 2026-11-03 left CC_INCOMPLETE on every day of
+# February to October (#73). Reads CC_STATUS_LOG and COLD_COPY_DIR.
+cc_failed_days() {
+    local s0 e0 t day last idx=""
+    s0=$(TZ=UTC date -d "$1" +%s); e0=$(TZ=UTC date -d "$2" +%s)
+    for (( t = s0; t <= e0; t += 86400 )); do
+        day=$(TZ=UTC date -d "@$t" +%F)
+        [ -f "${COLD_COPY_DIR}/_checksums/${day}.sha256" ] && continue
+        last=$(awk -F' [|] ' -v d="$day" -v since="$3" \
+            '$2 == d && $3 ~ /^CC_/ && $1 >= since {tok = $3} END {print tok}' "$CC_STATUS_LOG" 2>/dev/null)
+        case "$last" in
+            CC_WRITTEN|CC_CHECKED|CC_ALREADY|CC_WHOLLY_LOST) ;;
+            *) idx="${idx:+${idx},}$(( (t - s0) / 86400 ))" ;;
+        esac
+    done
+    echo "$idx"
+}
+# --- end cold copy retry ---
 
 # Once an array has left the queue, its days that failed (CC_ERROR) or still miss a wrfout
 # (CC_INCOMPLETE) are written again, once: a transient failure must not hold their wrfout
 # to the end of the campaign. What fails twice waits for a person (CC_RETRY_EXHAUSTED).
 cc_retry_failed() {
-    local i entry label sd ed jid retried s0 t day last idx
+    local i label sd ed jid retried submitted idx rc
     for i in "${!CC_ARRAYS[@]}"; do
-        read -r label sd ed jid retried <<<"${CC_ARRAYS[$i]}"
-        [ -n "$(timeout 60 squeue -h -j "$jid" 2>/dev/null)" ] && continue
-        s0=$(TZ=UTC date -d "$sd" +%s); idx=""
-        for (( t = s0; t <= $(TZ=UTC date -d "$ed" +%s); t += 86400 )); do
-            day=$(TZ=UTC date -d "@$t" +%F)
-            [ -f "${COLD_COPY_DIR}/_checksums/${day}.sha256" ] && continue
-            last=$(grep " | ${day} | CC_" "$CC_STATUS_LOG" 2>/dev/null | tail -n 1 | cut -d'|' -f3 | tr -d ' ')
-            case "$last" in CC_ERROR|CC_INCOMPLETE) idx="${idx:+${idx},}$(( (t - s0) / 86400 ))" ;; esac
-        done
+        read -r label sd ed jid retried submitted <<<"${CC_ARRAYS[$i]}"
+        cc_array_done "$jid"; rc=$?
+        if [ "$rc" = "1" ]; then continue; fi
+        if [ "$rc" = "2" ]; then
+            # No answer from sacct: still in the queue if squeue lists it; otherwise count it,
+            # and after an hour of silence give up waiting on it, saying so (#73).
+            [ -n "$(timeout 60 squeue -h -j "$jid" 2>/dev/null)" ] && continue
+            CC_UNKNOWN[$jid]=$(( ${CC_UNKNOWN[$jid]:-0} + 1 ))
+            [ "${CC_UNKNOWN[$jid]}" -lt "$CC_UNKNOWN_POLLS" ] && continue
+            log "CC_ARRAY_UNKNOWN | ${label}: array ${jid} unseen by sacct and squeue for ${CC_UNKNOWN_POLLS} polls; its days are judged by the ledger alone"
+        fi
+        idx=$(cc_failed_days "$sd" "$ed" "$submitted")
         unset 'CC_ARRAYS[i]'
         [ -n "$idx" ] || continue
         if [ "$retried" = "1" ]; then
