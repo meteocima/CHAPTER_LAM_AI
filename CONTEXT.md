@@ -191,7 +191,8 @@ yields, so this repo does not call the GRIB2 archive and the Cold Copy "two prod
 **Cold Copy**:
 CIMA's own copy of the wrfout's informative fields, hourly, on model levels, one surface file
 and one 3D file per calendar day. From 2018 back this repo writes it, beside the archive, from
-the same fetched wrfout.
+the same fetched wrfout; for 2019-2025, whose archive was already written, this repo writes it
+alone from a second fetch (ADR-0001, amended 2026-11-08).
 _Avoid_: backup, second archive
 
 **Ingest**:
@@ -204,8 +205,8 @@ One calendar day of the Cold Copy, its surface file and its 3D file together. Da
 wrfout of two runs: leads 29 and 30 of the run for D-1, leads 6 to 29 of the run for D.
 
 **Pass**:
-CHAPTER_INHOUSE's own traversal of the wrfout to write the Cold Copy where this repo does not:
-2019 to 2025.
+CHAPTER_INHOUSE's own traversal of the wrfout to write the Cold Copy where this repo does not.
+It was to cover 2019-2025; since 2026-11-08 this repo's campaigns do (ADR-0001).
 _Avoid_: campaign, which is this repo's
 
 **Hole**:

@@ -4,8 +4,9 @@ From 2018 back, each wrfout is fetched once. From that one fetch this repo write
 archive and also has CHAPTER_INHOUSE's Ingest write the Cold Copy's day files. A wrfout is
 deleted only when both are done. Fetching twice would spend the relay, and possibly a second
 tape recall, on 9.14 GB files that serve another project too (CHAPTER_INHOUSE ADR-0031). For
-2019-2025 the wrfout were already converted and deleted, so CHAPTER_INHOUSE's Pass fetches
-them again. Settled with the user in #73 on 2026-11-01.
+2019-2025 the wrfout were already converted and deleted, so they are fetched a second time,
+by this repo's campaigns and not by CHAPTER_INHOUSE's Pass (amendment below). Settled with the
+user in #73 on 2026-11-01.
 
 ## How
 
@@ -54,3 +55,28 @@ Run once, over the whole of 2018, from 2026-11-02 to 2026-11-07 23:12Z (`DONE`):
 the Cold Copy, bar day 2018-02-03's edge state, the defect of #74. The incidents on the way
 (the `grep -q` under pipefail, the 0-byte relay, the double write of April, the login-node
 outage, the NAS off for 8.6 h) are in CLAUDE.md's HPC gotchas; none came from the decision itself.
+
+## Amendment (2026-11-08): 2019-2025, the Cold Copy alone, by this repo (#74)
+
+The years whose GRIB were written before #73 get their Cold Copy from this repo's sequence too,
+not from CHAPTER_INHOUSE's Pass: the same `run_year_rebuild.sh`, Ingest, NAS copy and sweep
+that delivered 2018, one sequence per year (`COLD_COPY=true YEARS="2019"`). Their wrfout are
+fetched a second time -- the one fetch of this ADR cannot be had back for years already
+converted -- but once only, for the Cold Copy alone.
+
+**No separate mode.** With `COLD_COPY=true` a wrfout is fetched while either reader still
+needs it and it is not local: the archive (an hour reading its state has no GRIB and its
+snapshot is missing) or the Cold Copy (a day of the campaign reading it is not delivered).
+The driver asks the Ingest which, once per process (`cold_copy_day.py wanted`, over
+`cold-copy-day released`), so the rule of which days read a wrfout stays there. 2018 (no
+GRIB), 2019-2025 (no day) and the defect of #74 (a GRIB, an undelivered day: a trial's edge
+the next phase skipped on its GRIB) are the same rule. A phase with no GRIB missing gets no
+convert chain, no snapshot is written that no convert would release, and the sweep does not
+wait for a reading hour past the campaign, which lets the record's last hour, 2025-07-02T23,
+go.
+
+Considered: a `COLD_COPY_ONLY` switch. Rejected because a switch can disagree with the data
+-- a month with one GRIB missing, or the edge of #74 -- where the rule per reader cannot.
+The 2019-01-01 edge that the option above would have kept is fetched by the 2019 campaign as
+its state before the window.
+
