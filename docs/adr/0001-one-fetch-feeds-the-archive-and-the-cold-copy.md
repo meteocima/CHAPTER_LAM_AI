@@ -44,3 +44,13 @@ them again. Settled with the user in #73 on 2026-11-01.
 - **Keeping 2018-12-31T23 and 2019-01-01T00 for the 2019-2025 Pass**, which reads them for
   Cold Copy day 2019-01-01: the Pass fetches the whole of 2019 anyway, and two files kept
   for an open-ended time are not worth it.
+
+## Outcome (2018)
+
+Run once, over the whole of 2018, from 2026-11-02 to 2026-11-07 23:12Z (`DONE`): 8760 GRIB,
+`check_grib_sanity` bad=0 in all 12 months; 365 Cold Copy days delivered, none lost whole, all
+365 on CIMA's NAS (7.0 TB, `NAS_FINISHED`); `LEONARDO_CLEAN`, so only the GRIB and
+`_checksums/*.sha256` stayed here. One fetch per wrfout held: no month was fetched twice for
+the Cold Copy, bar day 2018-02-03's edge state, the defect of #74. The incidents on the way
+(the `grep -q` under pipefail, the 0-byte relay, the double write of April, the login-node
+outage, the NAS off for 8.6 h) are in CLAUDE.md's HPC gotchas; none came from the decision itself.
