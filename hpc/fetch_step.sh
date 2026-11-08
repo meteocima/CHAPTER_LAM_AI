@@ -69,6 +69,10 @@
 #                                    and the state before the window (fetched even if saved)
 #   COLD_COPY_DIR                  - the Cold Copy's directory, where a delivered day has its
 #                                    checksum file (_checksums/<day>.sha256)
+#   COLD_COPY_DAY                  - the Ingest's cold-copy-day (pinned clone): asked once per
+#                                    process which wrfout of the window a day still reads (#74)
+#   COLD_COPY_SPAN                 - "FIRST LAST", the campaign's days (default: the window's)
+#   COLD_COPY_LOST                 - pipeline.lost_wrfouts, checked, as JSON (default: none)
 #   MAX_QUEUED_CONVERTS            - >0: cap on this user's queued conv_* jobs. A convert is
 #                                    submitted whenever fewer than this are queued (#65)
 #   DRY_RUN                       - "1" to print commands instead of running them
@@ -84,6 +88,9 @@ DOWNLOAD_ONLY="${DOWNLOAD_ONLY:-0}"; export DOWNLOAD_ONLY
 KEEP_WRFOUT="${KEEP_WRFOUT:-0}"; export KEEP_WRFOUT
 COLD_COPY="${COLD_COPY:-0}"; export COLD_COPY
 COLD_COPY_DIR="${COLD_COPY_DIR:-}"; export COLD_COPY_DIR
+COLD_COPY_DAY="${COLD_COPY_DAY:-}"; export COLD_COPY_DAY
+COLD_COPY_SPAN="${COLD_COPY_SPAN:-}"; export COLD_COPY_SPAN
+COLD_COPY_LOST="${COLD_COPY_LOST:-[]}"; export COLD_COPY_LOST
 # Queue gate: CINECA frowns on hundreds of queued jobs. With a value > 0 the driver keeps
 # at most this many conv_* jobs of this user queued, submitting as soon as there is room.
 MAX_QUEUED_CONVERTS="${MAX_QUEUED_CONVERTS:-0}"
@@ -189,11 +196,16 @@ grib_path() {
 # hour still has to be differenced against its state. Keying on the wrfout alone
 # re-fetched every converted hour of a relaunched month, which the convert chain then
 # skipped on the GRIB and never deleted: ~12 TB after the relay outage of 2026-10-19.
+# With COLD_COPY=1 the Cold Copy is a second reader of the same wrfout: an hour whose GRIB
+# exists is still fetched while an undelivered day of the campaign reads it (cc_wants, #74),
+# which from 2019 on, every GRIB written, is every hour of a day still to write.
 already_done() {
     local d="$1" h="$2" raw
     if [ "${DOWNLOAD_ONLY}" = "1" ]; then
-        if [ -f "$(grib_path "$d" "$h")" ] && ! next_needs_snapshot "$d" "$h"; then
-            echo "SKIP_GRIB_EXISTS"; return 0
+        if [ -f "$(grib_path "$d" "$h")" ] && ! next_needs_snapshot "$d" "$h" \
+                && ! cc_wants "$(raw_path "$d" "$h")"; then
+            if [ "${COLD_COPY}" = "1" ]; then echo "SKIP_CC_DELIVERED"; else echo "SKIP_GRIB_EXISTS"; fi
+            return 0
         fi
         raw="${WRFOUT_DIR}/${d}/wrfout_d02_${d}_${h}:00:00"
         # A 00Z staged before #72 is the spin-up one, not the archived state.
@@ -401,30 +413,57 @@ drop_wrfout() {
     timeout 60 rm -f "$1" 2>/dev/null || true
 }
 
-# Snapshot of the archived state (day $1, hour $2), from its local wrfout.
+# Does the archive still need the state of (day $1, hour $2)? Only while an hour that reads
+# it -- its own, and the next unless it is 00Z (#72) -- has no GRIB. A snapshot nobody
+# converts against would never be released: ~1 TB a year of them, from 2019 on (#74).
+state_needed() {
+    local nd nh
+    [ -f "$(grib_path "$1" "$2")" ] || return 0
+    [ "$2" = "00" ] && return 1
+    read -r nd nh <<< "$(next_hour "$1" "$2")"
+    # Past the Cold Copy's campaign, the next hour is not this campaign's to convert: the
+    # one that covers it saves its own edge state. Above all 2025-07-03T00, which never
+    # exists -- its snapshot of 07-02T23 would never be released (#74).
+    if [ "${COLD_COPY}" = "1" ] && [ -n "${COLD_COPY_SPAN}" ] && [[ "$nd" > "${COLD_COPY_SPAN#* }" ]]; then
+        return 1
+    fi
+    ! [ -f "$(grib_path "$nd" "$nh")" ]
+}
+
+# Snapshot of the archived state (day $1, hour $2), from its local wrfout, if the archive
+# still needs it.
 ensure_archive_snapshot() {
     local d="$1" h="$2" raw
     [ -s "$(own_snap "$d" "$h")" ] && return 0
+    state_needed "$d" "$h" || return 0
     raw=$(raw_path "$d" "$h")
     [ -f "$raw" ] || return 1
     make_snapshot "$raw" "${d}T${h}" archived
 }
 
 # Snapshot of the 00Z of the run for day $1, 6 h into its spin-up: the state the
-# hour 00Z -> 01Z of $1 is differenced against, and nothing else (#72). Fetched
-# into SPINUP_DIR, snapshotted, deleted; logged against 01Z, the hour it serves.
+# hour 00Z -> 01Z of $1 is differenced against (#72), and lead 6 of the day's run,
+# the start of its Cold Copy 01Z (#73). Fetched into SPINUP_DIR while either still
+# needs it -- the archive until its snapshot is saved or 01Z converted, the Cold Copy
+# until the day is delivered -- snapshotted only for the archive, then deleted unless
+# the Cold Copy keeps it; logged against 01Z, the hour it serves.
 ensure_spinup() {
-    local d="$1" run dir name
+    local d="$1" run dir name snap=0
     run=$(run_for_day "$d")
-    [ -s "$(spinup_snap "$d")" ] && return 0
     dir="${SPINUP_DIR}/${run}"; name="wrfout_d02_${d}_00:00:00"
+    [ -s "$(spinup_snap "$d")" ] || [ -f "$(grib_path "$d" 01)" ] || snap=1
+    if [ "$snap" = "0" ] && { ! cc_wants "${dir}/${name}" || raw_ok "${dir}/${name}"; }; then
+        return 0
+    fi
     [ "${DRY_RUN}" = "1" ] || mkdir -p "$dir"
     if ! fetch_wrfout "$d" "00" "$(relay_base "$d")/${run}/${name}" "$dir" quiet; then
-        log_status "${d}T01" "SPINUP_UNAVAILABLE" "00Z of run ${run} not fetched (missing, empty or timed out; see the driver log): the hour 00Z->01Z of ${d} cannot be computed. Re-run; verify on LRZ if it persists"
+        log_status "${d}T01" "SPINUP_UNAVAILABLE" "00Z of run ${run} not fetched (missing, empty or timed out; see the driver log): $([ "$snap" = "1" ] && echo "the hour 00Z->01Z of ${d} cannot be computed" || echo "Cold Copy day ${d} cannot be written (its 01Z GRIB is there)"). Re-run; verify on LRZ if it persists"
         return 1
     fi
-    make_snapshot "${dir}/${name}" "${d}T01" || return 1
-    drop_wrfout "${dir}/${name}" "spin-up 00Z of run ${run}, snapshotted"
+    if [ "$snap" = "1" ]; then
+        make_snapshot "${dir}/${name}" "${d}T01" || return 1
+    fi
+    drop_wrfout "${dir}/${name}" "spin-up 00Z of run ${run}"
 }
 
 # A local 00Z that is not the archived state -- the spin-up 00Z of the run for its
@@ -562,7 +601,7 @@ process_one() {
     fetch_wrfout "$d" "$h" || return 1
     if [ "${DRY_RUN}" = "1" ]; then
         log_status "$dt" "FETCH_OK" "(dry-run)"
-        make_snapshot "$(raw_path "$d" "$h")" "$dt"
+        state_needed "$d" "$h" && make_snapshot "$(raw_path "$d" "$h")" "$dt"
         [ "$h" = "01" ] && ensure_spinup "$d"
         if [ "${DOWNLOAD_ONLY}" != "1" ]; then
             submit_convert "$d" "$h"
@@ -572,7 +611,7 @@ process_one() {
     fi
     size=$(stat -c%s "$(raw_path "$d" "$h")" 2>/dev/null || echo 0)
 
-    log_status "$dt" "FETCH_OK" "size=${size}B"
+    log_status "$dt" "FETCH_OK" "size=${size}B$([ "${COLD_COPY}" = "1" ] && [ -f "$(grib_path "$d" "$h")" ] && echo ', for the Cold Copy (GRIB written)')"
     ensure_archive_snapshot "$d" "$h" || true
     [ "$h" = "01" ] && { ensure_spinup "$d" || true; }
     if [ "${DOWNLOAD_ONLY}" = "1" ]; then
@@ -628,20 +667,16 @@ next_needs_snapshot() {
 fetch_edge_state() {
     local sd sh pd ph
     sd="${START_DT%T*}"; sh="${START_DT#*T}"
-    [ -f "$(grib_path "$sd" "$sh")" ] && return 0
     if [ "$sh" = "01" ]; then
         ensure_spinup "$sd" || true
         return 0
     fi
     read -r pd ph <<< "$(TZ=UTC date -d "@$(( START_EPOCH - 3600 ))" '+%Y-%m-%d %H')"
     # The Cold Copy reads the file itself (its first day's 00Z starts from it), so
-    # a saved snapshot is not enough there: the download chain fetches it unless it is
-    # local or that day is delivered already (its checksum file, cold-copy-day), in
-    # which case the sweep took it and nobody reads it again. Never the convert chain,
-    # which sees local files only (#73).
-    if [ "${COLD_COPY}" = "1" ] && [ "${DOWNLOAD_ONLY}" = "1" ] \
-            && ! [ -f "$(raw_path "$pd" "$ph")" ] \
-            && ! [ -f "${COLD_COPY_DIR}/_checksums/${sd}.sha256" ]; then
+    # a saved snapshot, or a GRIB, is not enough there: the download chain fetches it
+    # unless it is local or no undelivered day reads it any more (cc_wants), in which
+    # case the sweep took it. Never the convert chain, which sees local files only (#73).
+    if cc_wants "$(raw_path "$pd" "$ph")" && ! raw_ok "$(raw_path "$pd" "$ph")"; then
         echo "  [${pd}T${ph}] state before the window: fetching it for the Cold Copy."
         snapshot_only "$pd" "$ph" edge || true
     elif ! ensure_archive_snapshot "$pd" "$ph"; then
@@ -778,6 +813,35 @@ if [ -n "${SKIP_LIST}" ] && [ -f "${SKIP_LIST}" ]; then
     echo "Skip-list: ${SKIP_LIST}  (${#SKIP_SET[@]} timesteps to skip a-priori)"
 elif [ -n "${SKIP_LIST}" ]; then
     echo "WARN: SKIP_LIST set but file not found: ${SKIP_LIST}"
+fi
+
+# The wrfout of the window an undelivered Cold Copy day still reads, asked of the Ingest
+# once per process (cold_copy_day.py wanted: the rule of which days read a wrfout is its,
+# not copied here). Only the download chain fetches for the Cold Copy. If the Ingest
+# cannot answer, every file is taken as wanted: 9 GB too many rather than a hole (#74).
+declare -A CC_WANT=()
+CC_WANT_ALL=0
+norm_path() { local p="$1"; while [[ "$p" == *//* ]]; do p="${p//\/\//\/}"; done; echo "$p"; }
+cc_wants() {
+    [ "${COLD_COPY}" = "1" ] && [ "${DOWNLOAD_ONLY}" = "1" ] || return 1
+    [ "$CC_WANT_ALL" = "1" ] && return 0
+    [ -n "${CC_WANT[$(norm_path "$1")]:-}" ]
+}
+if [ "${COLD_COPY}" = "1" ] && [ "${DOWNLOAD_ONLY}" = "1" ]; then
+    cc_lost=$(mktemp); cc_err=$(mktemp)
+    printf '%s' "${COLD_COPY_LOST}" > "$cc_lost"
+    # shellcheck disable=SC2086
+    if cc_out=$(cd "$PROJECT_DIR" && timeout 600 uv run python hpc/cold_copy_day.py wanted \
+            --wrfout-dir "${WRFOUT_DIR}" --out "${COLD_COPY_DIR}" --window "${START_DT}" "${END_DT}" \
+            --span ${COLD_COPY_SPAN:-${START_DT%T*} ${END_DT%T*}} --lost "$cc_lost" 2>"$cc_err"); then
+        while IFS= read -r p; do [ -n "$p" ] && CC_WANT["$(norm_path "$p")"]=1; done <<< "$cc_out"
+        echo "ColdCopy:  ${#CC_WANT[@]} wrfout of the window still read by an undelivered day"
+    else
+        CC_WANT_ALL=1
+        echo "WARN: the Ingest did not say what the Cold Copy still reads; fetching every file not local."
+        log_status "DRIVER@$(hostname)" "CC_WANTED_FAILED" "cold_copy_day.py wanted: $(tail -n 1 "$cc_err" | cut -c1-200); every wrfout not local is fetched"
+    fi
+    rm -f "$cc_lost" "$cc_err"
 fi
 
 # All timestamp arithmetic is done in UTC (WRF timesteps are UTC) via epoch
@@ -928,10 +992,14 @@ while [ "$processed" -lt "$BATCH_SIZE" ] && within_window "$CUR_EPOCH"; do
         log_status "$dt" "SKIP_OFFLINE" "on paths.skip_list; source unavailable (recall on LRZ then re-run)"
     elif done_tag=$(already_done "$d" "$h"); then
         case "$done_tag" in
-            SKIP_RAW_EXISTS) echo "  [${dt}] wrfout already staged, skipping." ;;
-            *)               echo "  [${dt}] GRIB already exists, skipping." ;;
+            SKIP_RAW_EXISTS)   echo "  [${dt}] wrfout already staged, skipping." ;;
+            SKIP_CC_DELIVERED) echo "  [${dt}] GRIB exists and every Cold Copy day reading it is delivered, skipping." ;;
+            *)                 echo "  [${dt}] GRIB already exists, skipping." ;;
         esac
         log_status "$dt" "$done_tag" ""
+        # The spin-up 00Z goes with 01Z and has the same reader, but a 01Z skipped on its
+        # GRIB may still leave it to fetch for the archive or the Cold Copy (ensure_spinup).
+        [ "$h" = "01" ] && [ "$done_tag" != "SKIP_RAW_EXISTS" ] && { ensure_spinup "$d" || true; }
         if [ "${DRY_RUN}" != "1" ]; then
             if [ "$done_tag" = "SKIP_RAW_EXISTS" ]; then
                 # Staged before snapshots existed, or by a chain that was stopped.

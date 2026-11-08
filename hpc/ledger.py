@@ -22,6 +22,9 @@ TOKEN_KINDS = {
     'CONVERT_SUBMITTED': CLEAR,
     'SKIP_GRIB_EXISTS': CLEAR,
     'SKIP_RAW_EXISTS': CLEAR,
+    # #74: with COLD_COPY=1, an hour whose GRIB exists and that no undelivered day of
+    # the Cold Copy reads -- the Cold Copy's own SKIP_GRIB_EXISTS
+    'SKIP_CC_DELIVERED': CLEAR,
     'SNAPSHOT_OK': CLEAR,
     'REF_OK': CLEAR,
     # #72: a 00Z whose 24 h file was verified lost on LRZ and listed in
@@ -64,6 +67,9 @@ TOKEN_KINDS = {
     # about the chain itself, keyed DRIVER@<host> and not about any timestep
     'RESPAWN_FAILED': CHAIN,
     'DATAMOVER_UNREACHABLE': CHAIN,
+    # #74: the Ingest did not say which wrfout the Cold Copy still reads, so that
+    # process fetched every file not local
+    'CC_WANTED_FAILED': CHAIN,
 
     # historical: no current driver writes these, but they sit in live ledgers.
     # TAPE_TIMEOUT and UNREADABLE_TAPE were renamed (cae74a3, c67b7f9);

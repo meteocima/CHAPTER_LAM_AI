@@ -51,6 +51,10 @@ pipeline:
   # window, which the archive deletes after their snapshot. Set by run_year_rebuild.sh
   # when it writes the Cold Copy beside the GRIB.
   cold_copy: false
+  # The campaign's first and last day, [FIRST, LAST]: the days of the Cold Copy it
+  # delivers. With cold_copy, an hour is fetched while one of these days that reads it is
+  # not delivered, GRIB or no GRIB (#74). Set by run_year_rebuild.sh; null = the window's.
+  cold_copy_span: null
 
 # Paths on Leonardo
 paths:
@@ -59,6 +63,9 @@ paths:
   # The Cold Copy's day files, written beside the GRIB from 2018 back (#73), until
   # they cross to CIMA's NAS (CHAPTER_INHOUSE #38).
   cold_copy_dir: ${paths.work_dir}/cold_copy
+  # The Ingest's cold-copy-day, from the CHAPTER_INHOUSE clone pinned to a tag, never the
+  # development checkout: the driver asks it which wrfout a day still reads (#74).
+  cold_copy_day: ${paths.work_dir}/cold_copy_src/cold_copy/.venv/bin/cold-copy-day
   # GRIB2 schema, 246 messages. A new tree at every schema change, for the same
   # reason each time: convert_step.sh keys its re-entrancy on the output file
   # existing, so writing a wider schema into the old tree would silently skip

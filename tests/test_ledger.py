@@ -218,7 +218,7 @@ def tokens_written_by_cold_copy_day():
 def test_the_driver_tokens_can_still_be_read_out_of_the_driver():
     """Guards the three tests below: a subset assertion passes trivially against
     an empty set, so a regex that quietly stops matching would look like health."""
-    assert len(tokens_written_by_the_driver()) == 18 + 7
+    assert len(tokens_written_by_the_driver()) == 18 + 7 + 2
     assert len(tokens_written_by_cold_copy_day()) == 7
 
 

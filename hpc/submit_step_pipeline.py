@@ -15,6 +15,7 @@ Usage:
     python hpc/submit_step_pipeline.py ... dry_run=true                    # local preview, no SLURM
 """
 
+import json
 import os
 import re
 import shutil
@@ -302,6 +303,12 @@ def app(cfg: DictConfig):
         "MISSING_00Z_DAYS": " ".join(missing_00z_days(cfg.pipeline)),
         "COLD_COPY": "1" if cfg.pipeline.get("cold_copy", False) else "0",
         "COLD_COPY_DIR": str(cfg.paths.get("cold_copy_dir", "")),
+        # What the download chain asks the Ingest once per process: which wrfout of the
+        # window an undelivered day of the campaign (cold_copy_span) still reads (#74).
+        "COLD_COPY_DAY": str(cfg.paths.get("cold_copy_day", "") or ""),
+        "COLD_COPY_SPAN": " ".join(str(d) for d in (cfg.pipeline.get("cold_copy_span") or [])),
+        "COLD_COPY_LOST": json.dumps(check_lost(
+            OmegaConf.to_container(cfg.pipeline, resolve=True), "pipeline")),
         "MAX_QUEUED_CONVERTS": str(int(cfg.batch.get("max_queued_converts", 0))),
         "DRY_RUN": "1" if dry_run else "0",
     }

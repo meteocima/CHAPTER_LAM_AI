@@ -52,6 +52,10 @@
 # clone pinned in COLD_COPY_DAY), beside the phase's converts. A sweep, before every
 # phase and at every quota poll, deletes each wrfout the archive and the Cold Copy are done with: the
 # Ingest releases it and its GRIB is written. Ledger: logs/cold_copy_status.log.
+# From 2019 on, every GRIB written, the same command writes the Cold Copy alone (#74): the
+# download chain fetches what an undelivered day reads, GRIB or no GRIB; a phase with no GRIB
+# missing gets no convert chain (CONVERT_NOTHING) and the campaign no sanity job
+# (SANITY_SKIPPED). YEARS phases stop at the record's last hour, 2025-07-02T23.
 # A trial, or any odd window: PHASES_SPEC="label sd sh ed eh;label sd sh ed eh"
 # replaces the phase table (e.g. the two days either side of a month boundary).
 #
@@ -172,13 +176,38 @@ PHASES=(
 # Unset, the table above runs as it always did.
 YEARS="${YEARS:-}"
 export YEARS
+
+# --- phases (extracted by tests/test_sequence_phases.py; keep the markers) ---
+# CHAPTER's last hour: the LRZ source stops there (measured). No phase asks for later.
+RECORD_END_DAY=2025-07-02
+RECORD_END_HOUR=23
+# One phase per calendar month of year $1, "label sd sh ed eh", cut at RECORD_END.
+year_phases() {
+    local y="$1" m last ed eh
+    for m in 01 02 03 04 05 06 07 08 09 10 11 12; do
+        [[ "${y}-${m}-01" > "$RECORD_END_DAY" ]] && break
+        last=$(TZ=UTC date -d "${y}-${m}-01 +1 month -1 day" +%d)
+        ed="${y}-${m}-${last}"; eh=23
+        if [[ "$ed" > "$RECORD_END_DAY" ]]; then ed="$RECORD_END_DAY"; eh="$RECORD_END_HOUR"; fi
+        echo "r${y:2:2}_${m} ${y}-${m}-01 0 ${ed} ${eh}"
+    done
+}
+# How many hours of [$1 $2, $3 $4] have no GRIB (GRIB_PATTERN, a strftime pattern).
+# Zero: the phase is the Cold Copy's alone, and no convert chain is launched (#74).
+phase_missing_gribs() {
+    local e end n=0
+    e=$(TZ=UTC date -d "$1 $((10#$2)):00:00" +%s); end=$(TZ=UTC date -d "$3 $((10#$4)):00:00" +%s)
+    for (( ; e <= end; e += 3600 )); do
+        [ -f "$(TZ=UTC date -d "@$e" +"$GRIB_PATTERN")" ] || n=$((n + 1))
+    done
+    echo "$n"
+}
+# --- end phases ---
+
 if [ -n "$YEARS" ]; then
     PHASES=()
     for y in $YEARS; do
-        for m in 01 02 03 04 05 06 07 08 09 10 11 12; do
-            last=$(TZ=UTC date -d "${y}-${m}-01 +1 month -1 day" +%d)
-            PHASES+=("r${y:2:2}_${m} ${y}-${m}-01 0 ${y}-${m}-${last} 23")
-        done
+        mapfile -t -O "${#PHASES[@]}" PHASES < <(year_phases "$y")
     done
 fi
 
@@ -435,6 +464,7 @@ dl_args() {
     echo "window.start_date=${sd} window.start_hour=${sh} window.end_date=${ed} window.end_hour=${eh}" \
          "pipeline.download_only=true paths.wrfout_dir=${STAGING_DIR}" \
          "pipeline.cold_copy=${COLD_COPY} paths.cold_copy_dir=${COLD_COPY_DIR}" \
+         "pipeline.cold_copy_span=[${CC_FIRST_DAY},${CC_LAST_DAY}] paths.cold_copy_day=${COLD_COPY_DAY}" \
          "batch.fetch_parallel=${FETCH_PARALLEL} batch.size=${MAX_QUEUED} batch.max_queued_converts=0" \
          "paths.status_log=${LOG_DIR}/rebuild_${label}_dl_status.log" \
          "paths.driver_log=${LOG_DIR}/rebuild_${label}_dl_driver.log" \
@@ -532,7 +562,7 @@ if [ "$COLD_COPY" = "true" ]; then
         log "FATAL | ${COLD_COPY_SRC} cannot run tools.nas_push (see above): pin it to ingest-2018-v3 or later and build its venv with --group tools"
         exit 1
     fi
-    if ! "$COLD_COPY_DAY" released --help | grep -q -- '--on-nas'; then
+    if ! "$COLD_COPY_DAY" released --help | grep -F -- '--on-nas' > /dev/null; then
         log "FATAL | ${COLD_COPY_DAY} has no released --on-nas: pin the clone to ingest-2018-v3 or later"
         exit 1
     fi
@@ -548,7 +578,8 @@ if [ "$COLD_COPY" = "true" ]; then
 fi
 
 CV_PENDING=()   # "label sd sh ed eh offset" of the convert chains still to be waited on
-MONTHS=""       # distinct YYYY-MM touched, for the final sanity job
+RAN=()          # "label sd sh ed eh" of every phase run, for the reports
+MONTHS=""       # distinct YYYY-MM a convert chain ran on, for the final sanity job
 
 for ph in "${PHASES[@]}"; do
     read -r label sd sh ed eh <<<"$ph"
@@ -557,7 +588,7 @@ for ph in "${PHASES[@]}"; do
         log "SKIP_PHASE | ${label}: not in PHASES_ONLY"
         continue
     fi
-    case ",${MONTHS}," in *",${sd:0:7},"*) ;; *) MONTHS="${MONTHS:+${MONTHS},}${sd:0:7}" ;; esac
+    RAN+=("${label} ${sd} ${sh} ${ed} ${eh}")
     cc_sweep
     wait_for_quota "$label"
 
@@ -579,6 +610,13 @@ for ph in "${PHASES[@]}"; do
     # 00Z of each day and the state before the window. The days need no GRIB.
     [ "$COLD_COPY" = "true" ] && cc_submit_array "$label" "$sd" "$ed"
 
+    # A phase whose every GRIB is written is the Cold Copy's alone (2019-2025): no
+    # convert chain, nothing for the sanity job to look at (#74).
+    if [ "$(phase_missing_gribs "$sd" "$sh" "$ed" "$eh")" = "0" ]; then
+        log "CONVERT_NOTHING | ${label}: every GRIB present, no convert chain"
+        continue
+    fi
+    case ",${MONTHS}," in *",${sd:0:7},"*) ;; *) MONTHS="${MONTHS:+${MONTHS},}${sd:0:7}" ;; esac
     # Convert this phase in the background (local files only, no datamover) while the
     # next phase downloads. Its wrfout are deleted one by one as the GRIBs appear.
     cv_log="${LOG_DIR}/rebuild_${label}_cv_driver.log"
@@ -639,8 +677,10 @@ fi
 # archive is clean is useful even when it is incomplete -- but the run must not end in DONE.
 INCOMPLETE=0
 
-for pend in "${CV_PENDING[@]}"; do
-    read -r label sd sh ed eh off <<<"$pend"
+# Every phase run, converted here or not: the report reads the GRIB, so it says whether
+# the phase is whole either way.
+for pend in "${RAN[@]}"; do
+    read -r label sd sh ed eh <<<"$pend"
     # shellcheck disable=SC2046
     cargs=( $(cv_args "$label" "$sd" "$sh" "$ed" "$eh") )
     rep="${LOG_DIR}/rebuild_${label}_report.txt"
@@ -656,8 +696,8 @@ done
 if [ "$COLD_COPY" = "true" ]; then
     # A day is done when its checksum file is there (cold-copy-day): count them per
     # phase, and name the days missing, with their last ledger line.
-    for pend in "${CV_PENDING[@]}"; do
-        read -r label sd sh ed eh off <<<"$pend"
+    for pend in "${RAN[@]}"; do
+        read -r label sd sh ed eh <<<"$pend"
         s0=$(TZ=UTC date -d "$sd" +%s); e0=$(TZ=UTC date -d "$ed" +%s)
         done_days=0; lost_days=0; missing=""
         for (( t = s0; t <= e0; t += 86400 )); do
@@ -679,7 +719,7 @@ if [ "$COLD_COPY" = "true" ]; then
         fi
     done
 fi
-for y in $(printf '%s\n' ${MONTHS//,/ } | cut -c1-4 | sort -u); do
+for y in $(printf '%s\n' "${RAN[@]}" | awk '{print substr($2, 1, 4)}' | sort -u); do
     log "GRIB_COUNT | ${y}: $(find "${W}/grib_v3/${y}" -name '*.grib' 2>/dev/null | wc -l)"
 done
 log "STAGING_LEFT | $(find "${STAGING_DIR}" -name 'wrfout_d02_*' -type f | wc -l) wrfout still in ${STAGING_DIR}, $(used_tb) TB used"
@@ -687,20 +727,24 @@ log "STAGING_LEFT | $(find "${STAGING_DIR}" -name 'wrfout_d02_*' -type f | wc -l
 # One array task per month: a single job reads ~1 200 files an hour, so 48 months
 # (~35 000 files) would outlast any wall time. Each task checks its own month.
 months_list="${MONTHS//,/ }"
-n_months=$(printf '%s\n' $months_list | wc -l)
-month_args=" --month \$(echo ${months_list} | cut -d' ' -f\$((SLURM_ARRAY_TASK_ID + 1)))"
-jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$SANITY_ACCOUNT" \
-    --nodes 1 --ntasks 1 --cpus-per-task 1 --mem 8G --time 04:00:00 \
-    --array "0-$((n_months - 1))" \
-    --job-name "sanity_rebuild" --output "${LOG_DIR}/rebuild_sanity_%A_%a.out" \
-    --wrap "cd ${PROJECT_DIR}
+n_months=$(printf '%s\n' $months_list | grep -c .)
+if [ "$n_months" -eq 0 ]; then
+    log "SANITY_SKIPPED | no convert chain ran: no GRIB written, none to check (#74)"
+else
+    month_args=" --month \$(echo ${months_list} | cut -d' ' -f\$((SLURM_ARRAY_TASK_ID + 1)))"
+    jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$SANITY_ACCOUNT" \
+        --nodes 1 --ntasks 1 --cpus-per-task 1 --mem 8G --time 04:00:00 \
+        --array "0-$((n_months - 1))" \
+        --job-name "sanity_rebuild" --output "${LOG_DIR}/rebuild_sanity_%A_%a.out" \
+        --wrap "cd ${PROJECT_DIR}
 module load eccodes/2.34.0--gcc--12.2.0 2>/dev/null
 GCC12_RT=/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0/gcc-runtime-12.2.0-dqfwf7yjtbtdzllj66jx6suk34ir2ct3/lib
 ECCODES_LIB=/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0/eccodes-2.34.0-msheephhj7zirdzmqcfdrf4jat5w545r/lib64
 export LD_PRELOAD=\$GCC12_RT/libstdc++.so.6
 export LD_LIBRARY_PATH=\$GCC12_RT:\$ECCODES_LIB:\${LD_LIBRARY_PATH:-}
 ${UV} run python hpc/check_grib_sanity.py${month_args}")
-log "SANITY_SUBMITTED | array job ${jid:-FAILED} (${n_months} months) -> ${LOG_DIR}/rebuild_sanity_${jid}_<task>.out"
+    log "SANITY_SUBMITTED | array job ${jid:-FAILED} (${n_months} months) -> ${LOG_DIR}/rebuild_sanity_${jid}_<task>.out"
+fi
 
 if [ "$COLD_COPY" = "true" ]; then
     # Nothing but the GRIB, and the checksum files that record what is done, may stay.

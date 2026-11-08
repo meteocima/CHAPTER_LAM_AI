@@ -265,13 +265,16 @@ def release(valid, snap_dir, grib_of):
     return deleted
 
 
-def wrfout_may_go(valid, snap_dir, grib_of):
+def wrfout_may_go(valid, snap_dir, grib_of, counts=lambda v: True):
     """May the archived wrfout valid at `valid` be deleted, once its own hour is
     converted? Only if its state is saved, or every other hour that reads that
-    state is converted already -- for 00Z there is none (#72)."""
+    state is converted already -- for 00Z there is none (#72). `counts` says which
+    reading hours are waited for: the Cold Copy's sweep leaves out those past its
+    campaign, which no one here converts (hpc/cold_copy_day.py, #74)."""
     state = archive_state(valid)
     return (os.path.isfile(snapshot_path(snap_dir, state))
-            or all(os.path.isfile(grib_of(v)) for v in readers(state) if v != valid))
+            or all(os.path.isfile(grib_of(v)) for v in readers(state)
+                   if v != valid and counts(v)))
 
 
 def _cli(argv):

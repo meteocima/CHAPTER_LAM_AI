@@ -9,6 +9,8 @@ place that knows this repo's staging layout, and hands the Ingest what it holds:
   holdings   the staged wrfout by run and lead, plus those declared lost
              (pipeline.lost_wrfouts), as the JSON list `cold-copy-day` reads
   write DAY  one day of the Cold Copy: a task of the per-phase SLURM array
+  wanted     the wrfout of a window a Cold Copy day still reads: what the driver
+             fetches for it, GRIB or no GRIB (#74)
   sweep      once the array is done: delete every wrfout the Ingest releases and,
              for an archived hour, whose GRIB is written and whose state is saved
 
@@ -27,7 +29,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -146,11 +148,14 @@ def _archive_may_drop(valid: datetime, snap_dir: Path, grib_pattern: str,
     """The archive is done with an archived wrfout: its GRIB is written, unless its
     timestep lies outside the campaign (`span`) and no GRIB of it will ever be written
     here - the state before the first 00Z, fetched for its snapshot alone - and its state
-    is saved, or no timestep still to convert reads it (accum_hourly.wrfout_may_go)."""
+    is saved, or no timestep still to convert reads it (accum_hourly.wrfout_may_go). A
+    reader outside `span` is not this campaign's to convert, so it is not waited for: the
+    campaign that covers it fetches its own edge state (fetch_step.sh, fetch_edge_state),
+    and the record's last hour, whose next hour never exists, can go."""
+    inside = lambda v: span[0] <= f"{v:%Y-%m-%d}" <= span[1]  # noqa: E731
     grib_of = lambda v: v.strftime(grib_pattern)  # noqa: E731
-    inside = span[0] <= f"{valid:%Y-%m-%d}" <= span[1]
-    return (os.path.isfile(grib_of(valid)) or not inside) and \
-        accum_hourly.wrfout_may_go(valid, str(snap_dir), grib_of)
+    return (os.path.isfile(grib_of(valid)) or not inside(valid)) and \
+        accum_hourly.wrfout_may_go(valid, str(snap_dir), grib_of, counts=inside)
 
 
 def _spinup_may_drop(valid: datetime, snap_dir: Path, grib_pattern: str) -> bool:
@@ -197,6 +202,65 @@ def sweep(wrfout_dir: Path, out: Path, status_log: Path, grib_pattern: str, snap
         log_status(status_log, f"{valid:%Y-%m-%dT%H}", "CC_WRFOUT_DELETED",
                    f"{what}, run {run_init} lead {lead}: {path}")
     return 0
+
+
+def window_wrfouts(wrfout_dir: Path, first: datetime, last: datetime) -> dict[tuple[str, int], Path]:
+    """Every wrfout the hours `first`..`last` bring, by (run, lead), at the path the driver
+    stages it (fetch_step.sh): each archived hour, the spin-up 00Z of each day whose 01Z is
+    in the window, and the state before `first` (fetch_edge_state) -- staged or not."""
+    found: dict[tuple[str, int], Path] = {}
+
+    def add(state, path):
+        found[(state.run.strftime(_RUN), _lead(state))] = path
+
+    def archived(valid):
+        add(accum_hourly.archive_state(valid),
+            Path(wrfout_dir) / f"{valid:%Y-%m-%d}" / f"wrfout_d02_{valid:%Y-%m-%d_%H}:00:00")
+
+    def spinup(valid):
+        state = accum_hourly.spinup_state(valid)
+        add(state, spinup_dir(wrfout_dir) / state.run.strftime(_RUN)
+            / f"wrfout_d02_{valid:%Y-%m-%d}_00:00:00")
+
+    valid = first
+    while valid <= last:
+        archived(valid)
+        if valid.hour == 1:
+            spinup(valid.replace(hour=0))
+        valid += timedelta(hours=1)
+    before = first - timedelta(hours=1)
+    if first.hour == 1:
+        spinup(before)
+    else:
+        archived(before)
+    return found
+
+
+def wanted(wrfout_dir: Path, out: Path, window: tuple[datetime, datetime],
+           span: tuple[str, str], lost: list[dict]) -> list[Path]:
+    """The wrfout of `window` (window_wrfouts) a Cold Copy day within `span` still reads:
+    those the Ingest does not release (`cold-copy-day released`, whose rule says which days
+    read a wrfout; it opens none of them). A day counts once written, its checksum file
+    there, not once on CIMA's NAS: a written day reads its wrfout no more. What the driver
+    fetches for the Cold Copy (#74). A wrfout declared lost is a Hole, never wanted."""
+    candidates = window_wrfouts(wrfout_dir, *window)
+    holes = {(str(i["run"]), int(i["lead"])) for i in lost}
+    entries = [{"run": run, "lead": lead, "path": str(path)}
+               for (run, lead), path in sorted(candidates.items()) if (run, lead) not in holes]
+    entries += [{"run": str(i["run"]), "lead": int(i["lead"]),
+                 "hole": {"kind": "lost", "reason": str(i["reason"])}} for i in lost]
+    with tempfile.NamedTemporaryFile("w", suffix=".json", prefix="holdings_wanted_") as f:
+        json.dump(entries, f)
+        f.flush()
+        run = subprocess.run([_ingest_command(), "released", "--out", str(out),
+                              "--holdings", f.name, "--span", *span],
+                             capture_output=True, text=True)
+    if run.returncode != 0:
+        raise ValueError(f"cold-copy-day released exited {run.returncode}: "
+                         f"{run.stderr.strip()}")
+    released = {Path(line) for line in run.stdout.splitlines() if line.strip()}
+    return sorted(path for key, path in candidates.items()
+                  if key not in holes and path not in released)
 
 
 def lost_wrfouts(conf: Path) -> list[dict]:
@@ -276,6 +340,14 @@ def main(argv=None) -> int:
                       help="the campaign's first and last day: the days it delivers")
     free.add_argument("--on-nas", type=Path, metavar="LEDGER",
                       help="wait for the NAS copy's ledger to record the days reading a wrfout")
+    want = verbs.add_parser("wanted")
+    want.add_argument("--wrfout-dir", required=True, type=Path)
+    want.add_argument("--out", required=True, type=Path, help="the Cold Copy's directory")
+    want.add_argument("--window", nargs=2, required=True, metavar=("FIRST", "LAST"),
+                      help="the window's oldest and newest hour, YYYY-MM-DDTHH")
+    want.add_argument("--span", nargs=2, required=True, metavar=("FIRST", "LAST"),
+                      help="the campaign's first and last day: the days it delivers")
+    want.add_argument("--lost", type=Path, help="JSON list of pipeline.lost_wrfouts")
     args = parser.parse_args(argv)
     try:
         if args.verb == "holdings":
@@ -288,6 +360,12 @@ def main(argv=None) -> int:
         if args.verb == "write":
             return write(args.day, args.wrfout_dir, args.out, args.status_log,
                          _load_lost(args.lost))
+        if args.verb == "wanted":
+            window = tuple(datetime.strptime(t, "%Y-%m-%dT%H") for t in args.window)
+            for path in wanted(args.wrfout_dir, args.out, window, tuple(args.span),
+                               _load_lost(args.lost)):
+                print(path)
+            return 0
         if args.verb == "sweep":
             return sweep(args.wrfout_dir, args.out, args.status_log, args.grib_pattern,
                          args.snap_dir, _load_lost(args.lost), tuple(args.span),

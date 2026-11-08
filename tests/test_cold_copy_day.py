@@ -342,3 +342,87 @@ def test_with_on_nas_the_sweep_waits_for_the_days_to_be_on_the_nas(tmp_path):
 def test_without_on_nas_the_sweep_asks_for_delivered_days_as_before(tmp_path):
     sweep(tmp_path, [])
     assert "--on-nas" not in (tmp_path / "rec.args").read_text().split()
+
+
+def wanted(tmp, released, window, span=("2019-01-01", "2019-12-31"), lost=(), status=0):
+    """`cold_copy_day.py wanted` over `window`, the Ingest releasing `released`; (exit
+    status, the paths printed, what the Ingest was handed, its arguments)."""
+    record = tmp / "rec"
+    lost_json = tmp / "lost.json"
+    lost_json.write_text(json.dumps(list(lost)))
+    env = dict(os.environ, COLD_COPY_DAY=str(fake_ingest(tmp)), FAKE_RECORD=str(record),
+               FAKE_SAYS="\n".join(str(p) for p in released), FAKE_STATUS=str(status))
+    out = subprocess.run([sys.executable, str(MODULE), "wanted",
+                          "--wrfout-dir", str(tmp / "wrfout_rebuild"),
+                          "--out", str(tmp / "cold_copy"), "--window", *window,
+                          "--span", *span, "--lost", str(lost_json)],
+                         capture_output=True, text=True, cwd=ROOT, env=env)
+    handed = json.loads(record.with_suffix(".holdings").read_text()) \
+        if record.with_suffix(".holdings").exists() else []
+    args = record.with_suffix(".args").read_text().split() \
+        if record.with_suffix(".args").exists() else []
+    return out.returncode, out.stdout.split(), handed, args
+
+
+W19 = "wrfout_rebuild/2019-02-01/wrfout_d02_2019-02-01_{}:00:00"
+
+
+def test_wanted_hands_the_ingest_every_wrfout_the_window_days_read_where_it_would_be_staged(
+        tmp_path):
+    # A window 02-01T00..01Z: its two archived hours, the spin-up 00Z of 02-01 (the state
+    # before 01Z, lead 6 of the day's run) and 23Z of 01-31 (the state before 00Z, lead 29
+    # of the run before) -- staged or not, the Ingest does not open them.
+    _, _, handed, args = wanted(tmp_path, [], ("2019-02-01T00", "2019-02-01T01"))
+    assert sorted((e["run"], e["lead"], e["path"]) for e in handed) == sorted([
+        ("2019013018", 29, str(tmp_path / "wrfout_rebuild/2019-01-31/wrfout_d02_2019-01-31_23:00:00")),
+        ("2019013018", 30, str(tmp_path / W19.format("00"))),
+        ("2019013118", 6, str(tmp_path / "wrfout_rebuild_spinup/2019013118/wrfout_d02_2019-02-01_00:00:00")),
+        ("2019013118", 7, str(tmp_path / W19.format("01"))),
+    ])
+    # A day counts once written (its checksum file): not once on the NAS.
+    assert args[0] == "released" and "--on-nas" not in args
+    assert args[args.index("--span") + 1:args.index("--span") + 3] == ["2019-01-01", "2019-12-31"]
+
+
+def test_wanted_prints_what_the_ingest_does_not_release(tmp_path):
+    status, printed, _, _ = wanted(tmp_path, [tmp_path / W19.format("01")],
+                                   ("2019-02-01T01", "2019-02-01T01"))
+    assert status == 0
+    # 01Z released; the spin-up 00Z of 02-01, the state before it, still read.
+    assert printed == [str(tmp_path / "wrfout_rebuild_spinup/2019013118/wrfout_d02_2019-02-01_00:00:00")]
+
+
+def test_wanted_hands_a_wrfout_declared_lost_as_a_hole_and_never_wants_it(tmp_path):
+    lost = [{"run": "2019013118", "lead": 7, "reason": "verified on LRZ"}]
+    status, printed, handed, _ = wanted(tmp_path, [], ("2019-02-01T01", "2019-02-01T01"),
+                                        lost=lost)
+    assert status == 0
+    assert {"run": "2019013118", "lead": 7,
+            "hole": {"kind": "lost", "reason": "verified on LRZ"}} in handed
+    assert str(tmp_path / W19.format("01")) not in printed
+
+
+def test_wanted_fails_when_the_ingest_does(tmp_path):
+    # The driver then fetches everything not local (CC_WANTED_FAILED): never a guess.
+    status, _, _, _ = wanted(tmp_path, [], ("2019-02-01T01", "2019-02-01T01"), status=1)
+    assert status == 1
+
+
+def test_the_record_last_hour_goes_although_the_hour_after_it_never_has_a_grib(tmp_path):
+    # 2025-07-02T23 is CHAPTER's last hour: 07-03T00, the other hour that reads its state,
+    # lies past the campaign and will never be converted. Waiting for it would leave the
+    # file on Leonardo for ever (LEONARDO_NOT_CLEAN); no snapshot is written without a
+    # convert, so only the span can say it is not this campaign's to wait for.
+    last = touch(tmp_path / "wrfout_rebuild/2025-07-02/wrfout_d02_2025-07-02_23:00:00")
+    grib(tmp_path, "2025070223")
+    lines = sweep(tmp_path, [last], span=("2025-07-01", "2025-07-02"))
+    assert not last.exists()
+    assert [(ln[1], ln[2]) for ln in lines] == [("2025-07-02T23", "CC_WRFOUT_DELETED")]
+
+
+def test_an_hour_whose_state_a_later_hour_of_the_campaign_needs_is_still_kept(tmp_path):
+    # The same file in a campaign that goes on: 07-03T00 is its to convert.
+    last = touch(tmp_path / "wrfout_rebuild/2025-07-02/wrfout_d02_2025-07-02_23:00:00")
+    grib(tmp_path, "2025070223")
+    assert sweep(tmp_path, [last], span=("2025-07-01", "2025-07-31")) == []
+    assert last.exists()
