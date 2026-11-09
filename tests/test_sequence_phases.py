@@ -3,7 +3,8 @@
 From 2019 on the archive is done and the sequence runs for the Cold Copy alone: a phase
 with no GRIB missing gets no convert chain, and a campaign that converted nothing
 submits no sanity job (grilling of 2026-11-08, Q7 and Q8). The phases of YEARS stop at
-CHAPTER's last hour, 2025-07-02T23 (Q6): the source has nothing after it.
+CHAPTER's last day, 2025-07-02, at 23Z (Q6); its 24 h file, 07-03T00, is the record's last hour,
+converted apart.
 
 Both functions are extracted from between their markers and run as the sequence runs
 them.

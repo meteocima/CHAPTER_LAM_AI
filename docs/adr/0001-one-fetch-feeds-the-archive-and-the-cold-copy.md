@@ -72,8 +72,9 @@ The driver asks the Ingest which, once per process (`cold_copy_day.py wanted`, o
 GRIB), 2019-2025 (no day) and the defect of #74 (a GRIB, an undelivered day: a trial's edge
 the next phase skipped on its GRIB) are the same rule. A phase with no GRIB missing gets no
 convert chain, no snapshot is written that no convert would release, and the sweep does not
-wait for a reading hour past the campaign, which lets the record's last hour, 2025-07-02T23,
-go.
+wait for a reading hour past the campaign, which lets the campaign's last hour, 2025-07-02T23,
+go (07-03T00, the record's last hour, was converted apart on 2026-11-09 from the snapshot
+already on disk).
 
 Considered: a `COLD_COPY_ONLY` switch. Rejected because a switch can disagree with the data
 -- a month with one GRIB missing, or the edge of #74 -- where the rule per reader cannot.

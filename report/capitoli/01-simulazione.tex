@@ -17,9 +17,11 @@ da \ang{19.9722} O a \ang{42.2555} E. In verticale il modello ha 49 livelli, con
 \SI{50}{\hPa}. WRF integra le equazioni su una sfera di raggio \SI{6370}{km}, e l'archivio dichiara
 la stessa sfera nella definizione di griglia (\cref{sec:geometria}).
 
-L'archivio copre a passo orario gli anni 2019 e 2024 e il periodo dal 1º gennaio al 2 luglio 2025,
-per \num{21936} istanti di validità. Il 2 luglio 2025 alle 23 UTC è l'ultimo istante prodotto dalla
-simulazione. Ogni run giornaliera parte alle 18 UTC del giorno che precede quello a cui è dedicata
+La simulazione va dalla run partita alle 18 UTC del 31 dicembre 1980 a quella partita alle 18 UTC
+del 1º luglio 2025, una run per giorno senza interruzioni; il primo istante di validità completo è
+il 1º gennaio 1981 alle 01 UTC e l'ultimo il 3 luglio 2025 alle 00 UTC. L'archivio copre a passo
+orario il periodo dal 1º gennaio 2018 alle 00 UTC al 3 luglio 2025 alle 00 UTC, per \num{65761}
+istanti di validità. Ogni run giornaliera parte alle 18 UTC del giorno che precede quello a cui è dedicata
 e integra \SI{30}{h}; le prime \SI{6}{h} sono di spin-up e non entrano nell'archivio. Il giorno D è
 fatto degli istanti di validità dalle 01 alle 23 UTC della run partita alle 18 UTC di D$-1$, e il suo
 istante di validità delle 00 UTC è l'ultima ora, la trentesima, della run partita alle 18 UTC di

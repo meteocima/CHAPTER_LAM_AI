@@ -210,7 +210,7 @@ def test_without_cold_copy_an_hour_with_its_grib_is_still_skipped_on_it(tmp_path
 
 
 def test_the_record_last_hour_is_fetched_without_a_snapshot_nobody_would_release(tmp_path):
-    # 2025-07-03T00 never exists: a snapshot of 07-02T23 for it would stay for ever.
+    # 2025-07-03T00 lies past the campaign: a snapshot of 07-02T23 for it would stay for ever.
     all_gribs(tmp_path, "2025-07-02", "2025-07-02")
     out = run_driver(tmp_path, "2025-07-02T23", "2025-07-02T23", cold_copy=True,
                      COLD_COPY_SPAN="2025-01-01 2025-07-02")

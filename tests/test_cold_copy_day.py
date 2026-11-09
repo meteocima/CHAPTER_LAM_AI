@@ -409,8 +409,8 @@ def test_wanted_fails_when_the_ingest_does(tmp_path):
 
 
 def test_the_record_last_hour_goes_although_the_hour_after_it_never_has_a_grib(tmp_path):
-    # 2025-07-02T23 is CHAPTER's last hour: 07-03T00, the other hour that reads its state,
-    # lies past the campaign and will never be converted. Waiting for it would leave the
+    # 2025-07-02T23 is the campaign's last hour: 07-03T00, the other hour that reads its state,
+    # lies past the campaign, which will never convert it. Waiting for it would leave the
     # file on Leonardo for ever (LEONARDO_NOT_CLEAN); no snapshot is written without a
     # convert, so only the span can say it is not this campaign's to wait for.
     last = touch(tmp_path / "wrfout_rebuild/2025-07-02/wrfout_d02_2025-07-02_23:00:00")

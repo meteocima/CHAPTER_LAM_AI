@@ -17,9 +17,10 @@ latitude and from \ang{19.9722} W to \ang{42.2555} E. Vertically the model has 4
 top at \SI{50}{\hPa}. WRF integrates the equations on a sphere of radius \SI{6370}{km}, and the
 archive declares the same sphere in the grid definition (\cref{sec:geometria}).
 
-The archive covers, at hourly resolution, the years 2019 and 2024 and the period from 1 January to
-2 July 2025, for \num{21936} validity times. The last validity time produced by the simulation is
-2 July 2025 at 23 UTC. Each daily run starts at 18 UTC on the day before the one it is dedicated to
+The simulation runs from the run started at 18 UTC on 31 December 1980 to the one started at 18 UTC
+on 1 July 2025, one run per day with no gaps; its first complete validity time is 1 January 1981 at
+01 UTC and its last 3 July 2025 at 00 UTC. The archive covers, at hourly resolution, the period from
+1 January 2018 at 00 UTC to 3 July 2025 at 00 UTC, for \num{65761} validity times. Each daily run starts at 18 UTC on the day before the one it is dedicated to
 and integrates for \SI{30}{h}; its first \SI{6}{h} are spin-up and are not part of the archive. Day
 D consists of the validity times from 01 to 23 UTC of the run started at 18 UTC on D$-1$, and its
 00 UTC validity time is the last hour, the thirtieth, of the run started at 18 UTC on D$-2$

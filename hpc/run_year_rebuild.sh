@@ -2,7 +2,7 @@
 #
 # Detached sequence that rebuilds the CHAPTER archive in GRIB2 (246 messages) for the
 # hours whose wrfout are NOT on local disk: 17 068 timesteps over 2019 (full year),
-# 2024 (full year) and 2025 (01-01..07-02 -- the source stops on 07-02T23, measured). Each one is fetched from the LRZ relay,
+# 2024 (full year) and 2025 (01-01..07-02 -- the last run is 2025070118; its 24 h file, 07-03T00, was converted apart). Each one is fetched from the LRZ relay,
 # converted, and its wrfout deleted as soon as the GRIB exists.
 #
 # Companion of hpc/run_share_conversion.sh, which converts the 4392 hours already
@@ -55,7 +55,8 @@
 # From 2019 on, every GRIB written, the same command writes the Cold Copy alone (#74): the
 # download chain fetches what an undelivered day reads, GRIB or no GRIB; a phase with no GRIB
 # missing gets no convert chain (CONVERT_NOTHING) and the campaign no sanity job
-# (SANITY_SKIPPED). YEARS phases stop at the record's last hour, 2025-07-02T23.
+# (SANITY_SKIPPED). YEARS phases stop at the last day's last hour, 2025-07-02T23
+# (07-03T00, the record's last hour, is that day's 24 h file; its GRIB was written apart).
 # A trial, or any odd window: PHASES_SPEC="label sd sh ed eh;label sd sh ed eh"
 # replaces the phase table (e.g. the two days either side of a month boundary).
 #

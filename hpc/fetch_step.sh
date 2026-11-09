@@ -422,8 +422,8 @@ state_needed() {
     [ "$2" = "00" ] && return 1
     read -r nd nh <<< "$(next_hour "$1" "$2")"
     # Past the Cold Copy's campaign, the next hour is not this campaign's to convert: the
-    # one that covers it saves its own edge state. Above all 2025-07-03T00, which never
-    # exists -- its snapshot of 07-02T23 would never be released (#74).
+    # one that covers it saves its own edge state. Above all 2025-07-03T00, which no
+    # campaign converts (it was converted apart) -- its snapshot of 07-02T23 would never be released (#74).
     if [ "${COLD_COPY}" = "1" ] && [ -n "${COLD_COPY_SPAN}" ] && [[ "$nd" > "${COLD_COPY_SPAN#* }" ]]; then
         return 1
     fi
