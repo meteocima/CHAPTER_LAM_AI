@@ -73,6 +73,13 @@ STAGING_DIR="${STAGING_DIR:-${W}/wrfout_rebuild}"   # this sequence's own stagin
                                                     # KEEP_WRFOUT decides if its wrfout survive
 SEQ_LOG="${LOG_DIR}/rebuild_sequence.log"
 SEQ_STOP="${LOG_DIR}/rebuild_sequence.stop"
+# One sequence at a time, whichever login node runs it: flock holds across nodes on
+# /leonardo_work. Held by the detached sequence for its whole life and by nothing it
+# launches (flock -o), so a download chain outliving a dead sequence never blocks the
+# relaunch that adopts it. On 2026-11-11 a relaunch ran beside a sequence still alive on
+# another node, frozen behind a nas_push in D state: for four days two arrays wrote the
+# same Cold Copy days and two sweeps raced (tests/test_sequence_lock.py).
+SEQ_LOCK="${LOG_DIR}/rebuild_sequence.lock"
 UV="${UV:-${HOME}/.local/bin/uv}"
 MAX_QUEUED=48          # convert chain: batch.size and batch.max_queued_converts
 # Concurrent sftp streams through the datamover. The knee is at 6 and the relay's
@@ -221,15 +228,28 @@ fi
 # ---- self-detach from a snapshot --------------------------------------------
 if [ -z "${SEQ_DETACHED:-}" ]; then
     mkdir -p "$LOG_DIR"
+    if ! flock -n "$SEQ_LOCK" true; then
+        echo "REFUSED: a sequence is already running (it holds ${SEQ_LOCK}; it may be on another" \
+             "login node, running from its snapshot ${LOG_DIR}/.rebuild_sequence_*.sh). Stop it" \
+             "with: touch ${SEQ_STOP}" >&2
+        exit 1
+    fi
     snap="${LOG_DIR}/.rebuild_sequence_$(date +%Y%m%d%H%M%S).sh"
     cp "$0" "${snap}.tmp" && mv "${snap}.tmp" "$snap"
-    SEQ_DETACHED=1 setsid bash "$snap" >> "$SEQ_LOG" 2>&1 < /dev/null &
+    # The lock is taken again by the detached side, which keeps it while the sequence lives;
+    # a launch racing this one between the two checks is refused there, in the log.
+    SEQ_DETACHED=1 setsid bash -c 'flock -n -o -E 75 "$1" bash "$2"
+        [ $? -ne 75 ] || echo "$(date -u +%FT%TZ) | REFUSED | another sequence took $1 first" >&2' \
+        _ "$SEQ_LOCK" "$snap" >> "$SEQ_LOG" 2>&1 < /dev/null &
     echo "Sequence detached on $(hostname) (pid $!), snapshot ${snap}"
     echo "Log: ${SEQ_LOG}    Stop: touch ${SEQ_STOP}"
     exit 0
 fi
 
 log() { echo "$(date -u +%FT%TZ) | $*" >&2; }
+
+# tests/test_sequence_lock.py: what the body holds open, so what everything it launches inherits.
+[ -n "${SEQ_FD_PROBE:-}" ] && ls -l "/proc/$$/fd" > "$SEQ_FD_PROBE" 2>&1
 
 check_stop() {
     if [ -e "$SEQ_STOP" ]; then
@@ -494,7 +514,7 @@ launch_chain() {
     offset=$(( $(stat -c%s "$dlog") + 1 ))
     if [ -n "$alive" ] && ! tail -n 3 "$dlog" | grep -q "Window complete\|STOP flag"; then
         log "WAIT | ${label} ${kind}: a chain is already alive (driver log fresh); adopting it"
-        echo 1; return 0
+        adopt_offset "$dlog"; return 0
     fi
     log "LAUNCH | ${label} ${kind}"
     if ! "$UV" run python hpc/submit_step_pipeline.py "$@" >&2; then
@@ -511,6 +531,19 @@ launch_chain() {
 # campaign at its first month on 2026-11-02 (#73, tests/test_sequence_chain_log.py).
 chain_log_says() {
     tail -c "+$2" "$1" | grep -F -- "$3" > /dev/null
+}
+
+# The offset from which an adopted chain's driver log is its own run: past the last line
+# by which an earlier run of the same label ended ("Window complete", "STOP flag present"),
+# else the whole log. Reading from byte 1 instead closed 2020-10 at its first poll on
+# 2026-11-15 on the "Window complete" of October's GRIB run, and its Cold Copy array ran
+# on a month still downloading (tests/test_sequence_lock.py).
+adopt_offset() {
+    local LC_ALL=C last
+    last=$(grep -bF -e "Window complete" -e "STOP flag present" -- "$1" | tail -n 1)
+    if [ -z "$last" ]; then echo 1; return 0; fi
+    local line="${last#*:}"
+    echo $(( ${last%%:*} + ${#line} + 2 ))
 }
 # --- end chain log ---
 
