@@ -262,11 +262,21 @@ submit_convert() {
 fetch_wrfout() {
     local d="$1" h="$2" quiet="${5:-}"
     local dt="${d}T${h}"
-    local local_dir remote fname dest
+    local local_dir remote fname dest part_dir part check
     local_dir="${4:-${WRFOUT_DIR}/${d}}"
     remote="${3:-$(remote_path "$d" "$h")}"
     fname="wrfout_d02_${d}_${h}:00:00"
     dest="${local_dir}/${fname}"
+    # sftp writes into .fetching/ and the file takes its final name only once checked,
+    # so a file under its final name is whole by construction. Written in place, a
+    # transfer killed midway left its head under the final name: the NetCDF check opens
+    # the header only, a truncated NETCDF3 file reads zeros past the cut, and every later
+    # pass took it for staged (2026-11-14, the Cold Copy's 2020-09-11 delivered with a
+    # whole run in one hour; tests/test_fetch_atomic.py). One level below the day, where
+    # cold_copy_day.py's glob does not look.
+    part_dir="${local_dir}/.fetching"
+    part="${part_dir}/${fname}"
+    check="$dest"
     mkdir -p "$local_dir"
 
     if [ "${DRY_RUN}" = "1" ]; then
@@ -281,6 +291,9 @@ fetch_wrfout() {
         echo "  [${dt}] wrfout already present locally."
     else
         [ -e "$dest" ] && { echo "  [${dt}] partial wrfout on disk, re-fetching."; timeout 30 rm -f "$dest" 2>/dev/null || true; }
+        mkdir -p "$part_dir"
+        timeout 30 rm -f "$part" 2>/dev/null || true
+        check="$part"
         local attempt rc errf snippet max_attempts
         max_attempts=$((FETCH_RETRIES + 1))
         errf=$(mktemp)
@@ -288,7 +301,7 @@ fetch_wrfout() {
         for attempt in $(seq 1 "$max_attempts"); do
             echo "  [${dt}] fetch attempt ${attempt}/${max_attempts} via datamover..."
             if timeout "${FETCH_TIMEOUT}" ssh -nxT "${DATAMOVER_HOST}" \
-                 "$(fetch_cmd "$remote" "$local_dir")" 2>"$errf"; then
+                 "$(fetch_cmd "$remote" "$part_dir")" 2>"$errf"; then
                 rc=0; break
             else
                 rc=$?
@@ -312,7 +325,7 @@ fetch_wrfout() {
 
         if [ "$rc" -ne 0 ]; then
             snippet=$(tr '\n' ' ' <"$errf" | tr -s ' ' | cut -c1-200)
-            rm -f "$errf"; timeout 30 rm -f "$dest" 2>/dev/null || true
+            rm -f "$errf"; timeout 30 rm -f "$part" 2>/dev/null || true
             if [ "$rc" -eq 124 ]; then
                 echo "  WARN [${dt}] FETCH_TIMEOUT (sftp > ${FETCH_TIMEOUT}s x${max_attempts})"
                 [ -n "$quiet" ] || log_status "$dt" "FETCH_TIMEOUT" "sftp exceeded ${FETCH_TIMEOUT}s on all ${max_attempts} attempts; usually datamover/relay congestion (re-run re-entrant), occasionally a file truly on tape (recall only if it persists across re-runs)"
@@ -332,13 +345,17 @@ fetch_wrfout() {
     # (datamover hiccup) or, rarely, a tape stub fails here -> drop it and flag.
     # Re-entrant re-run re-fetches; only a persistent failure points to real tape.
     local size
-    size=$(stat -c%s "$dest" 2>/dev/null || echo 0)
+    size=$(stat -c%s "$check" 2>/dev/null || echo 0)
     if [ "$size" -lt "$MIN_BYTES" ] || \
-       ! ( cd "$PROJECT_DIR" && uv run python -c "import sys,netCDF4; netCDF4.Dataset(sys.argv[1]).close()" "$dest" ) >/dev/null 2>&1; then
+       ! ( cd "$PROJECT_DIR" && uv run python -c "import sys,netCDF4; netCDF4.Dataset(sys.argv[1]).close()" "$check" ) >/dev/null 2>&1; then
         echo "  WARN [${dt}] UNREADABLE (size=${size}B)"
         [ -n "$quiet" ] || log_status "$dt" "UNREADABLE" "size=${size}B not a readable NetCDF; truncated/0-byte transfer or tape stub -> re-run re-entrant, recall only if it persists"
-        timeout 30 rm -f "$dest" 2>/dev/null || true
+        timeout 30 rm -f "$check" 2>/dev/null || true
         return 1
+    fi
+    if [ "$check" = "$part" ]; then
+        mv -f "$part" "$dest" || { echo "  WARN [${dt}] cannot move ${part} to ${dest}"; return 1; }
+        rmdir "$part_dir" 2>/dev/null || true
     fi
 }
 
