@@ -124,3 +124,39 @@ def test_a_delivered_day_is_never_written_again(tmp_path):
                                delivered=["2018-04-01", "2018-04-02", "2018-04-03",
                                           "2018-04-04", "2018-04-05"])
     assert failed(tmp_path, env) == ""
+
+
+# An array of the phase already in the queue is adopted, never doubled (2026-11-17). A
+# sequence relaunched while the previous one's array still runs reaches that phase and
+# used to submit a second array over the same days -- April 2018 again, written twice at
+# once. cc_live_array answers "<job> <submitted, UTC>" of a live `cc_<label>` array.
+def fake_squeue(tmp_path, lines, status=0):
+    """A squeue that prints `lines` whatever it is asked, and reports TZ, or fails."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    body = "".join(f"echo '{l}'\n" for l in lines)
+    (bin_dir / "squeue").write_text(f'#!/bin/bash\necho "$TZ $*" >> {tmp_path}/squeue.args\n'
+                                    f"{body}exit {status}\n")
+    (bin_dir / "squeue").chmod(0o755)
+
+
+def live(tmp_path, lines, status=0):
+    fake_squeue(tmp_path, lines, status)
+    out = run(tmp_path, 'cc_live_array r20_11; echo "rc=$?"', env={"USER": "me"}).stdout.split("\n")
+    return [l for l in out if l]
+
+
+def test_a_running_array_of_the_phase_is_found_with_its_submission_time(tmp_path):
+    # one line per task, as squeue prints an array that has started
+    out = live(tmp_path, ["64652763 2026-11-17T07:10:31"] * 3)
+    assert out == ["64652763 2026-11-17T07:10:31Z", "rc=0"]
+    args = (tmp_path / "squeue.args").read_text()
+    assert args.startswith("UTC ") and "cc_r20_11" in args and "-u me" in args
+
+
+def test_no_array_of_the_phase_means_submit(tmp_path):
+    assert live(tmp_path, []) == ["rc=1"]
+
+
+def test_a_failed_query_is_unknown_not_none(tmp_path):
+    assert live(tmp_path, [], status=1) == ["rc=2"]

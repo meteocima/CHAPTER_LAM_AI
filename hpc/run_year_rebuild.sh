@@ -306,6 +306,21 @@ cc_submit_array() {
     cc_read_lost || log "CC_LOST_KEPT | ${label}: pipeline.lost_wrfouts not valid (see above); the last valid list is used"
     s0=$(TZ=UTC date -d "$sd" +%s)
     n=$(( ( $(TZ=UTC date -d "$ed" +%s) - s0 ) / 86400 + 1 ))
+    if [ -z "$indices" ]; then
+        local live rc tries=0
+        while :; do
+            live=$(cc_live_array "$label"); rc=$?
+            [ "$rc" -ne 2 ] || [ "$tries" -ge 3 ] && break
+            tries=$((tries + 1)); sleep 60
+        done
+        if [ "$rc" -eq 0 ]; then
+            read -r jid submitted <<<"$live"
+            log "CC_ADOPTED | ${label}: array ${jid} (submitted ${submitted}) is still in the queue; waiting on it, not submitting another"
+            CC_ARRAYS+=("${label} ${sd} ${ed} ${jid} 0 ${submitted}")
+            return 0
+        fi
+        [ "$rc" -eq 2 ] && log "CC_QUEUE_UNKNOWN | ${label}: squeue did not answer 4 times; submitting"
+    fi
     [ -n "$indices" ] || indices="0-$((n - 1))"
     submitted=$(date -u +%FT%TZ)
     jid=$(sbatch --parsable --partition dcgp_usr_prod --account "$CC_ACCOUNT" \
@@ -322,6 +337,18 @@ export COLD_COPY_DAY=${COLD_COPY_DAY}
 }
 
 # --- cold copy retry (extracted by tests/test_cold_copy_retry.py; keep the markers) ---
+# The array of phase $1 already in the queue, if any: "<job> <submitted, UTC>" and 0; 1 if
+# none; 2 if squeue did not answer, which is not "none". A sequence relaunched while the
+# previous one's array still ran would otherwise reach that phase and write its days a
+# second time beside the first, as April 2018 was (2026-11-17, tests/test_cold_copy_retry.py).
+cc_live_array() {
+    local out
+    out=$(TZ=UTC timeout 60 squeue -h -u "${USER}" -n "cc_$1" -o "%F %V" 2>/dev/null) || return 2
+    out=$(printf '%s\n' "$out" | awk 'NF == 2 {print; exit}')
+    [ -n "$out" ] || return 1
+    echo "${out}Z"
+}
+
 # Is array $1 over? 0: sacct lists its tasks and every one is in a final state; 1: one is
 # not; 2: sacct gave no answer (failed, or nothing yet). An empty answer is never "over":
 # on 2026-11-04 a `squeue -j` that answered nothing made the sequence take April's running
